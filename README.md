@@ -3,27 +3,13 @@
 A sophisticated AI-powered document question-answering system designed specifically for mortgage and financial documents. This application uses advanced Retrieval-Augmented Generation (RAG) techniques to provide accurate, context-aware answers from PDF documents.
 
 ## Features
-
-### Core Functionality
-- **Multi-Modal PDF Processing**: Handles both digital and scanned PDFs with OCR
-- **Advanced RAG Pipeline**: Combines multiple retrieval methods for superior accuracy
-- **Domain-Specific Optimization**: Tailored for mortgage and financial documents
-- **Real-time Q&A**: Instant answers with confidence scoring
-- **Document Sectioning**: Intelligent document segmentation for targeted queries
-
-### Advanced Features
-- **Multi-Language Support**: 12+ languages with automatic translation
-- **Speech Interface**: Voice input and text-to-speech capabilities
-- **Export Functionality**: Export conversations to PDF, Word, or text formats
-- **Performance Metrics**: Comprehensive system monitoring and analytics
-- **Error Recovery**: Graceful degradation and automatic error handling
-
-### Technical Capabilities
-- **Hierarchical Chunking**: Multi-level text segmentation for optimal retrieval
-- **Hybrid Search**: Combines semantic, keyword, and TF-IDF search
-- **Query Expansion**: Automatic query enhancement with synonyms
-- **Result Reranking**: Semantic reranking for improved relevance
-- **Extractive QA**: Precise answer extraction using fine-tuned models
+- **Multi-Modal PDF Processing** – OCR for scanned + digital documents  
+- **Advanced RAG Pipeline** – Hybrid search, reranking, extractive QA  
+- **Domain-Optimized** – Tailored for mortgage & financial docs  
+- **Multi-Language Support** – 12+ languages with translation  
+- **Speech Interface** – Voice input and text-to-speech  
+- **Performance Metrics** – Accuracy, latency, and user analytics  
+- **Export Options** – Save chats to PDF, Word, or plain text  
 
 ## Architecture
 
@@ -44,14 +30,6 @@ The application is organized into modular components:
 ├── README.md             # Documentation
 └── LICENSE               # License information
 ```
-
-### Key Components
-
-1. **Document Processor**: Handles PDF extraction, OCR, and document segmentation
-2. **RAG Engine**: Manages chunking, vector storage, and retrieval
-3. **LLM Interface**: Integrates with Google Gemini for text generation
-4. **Export Manager**: Handles conversation and document exports
-5. **Performance Metrics**: Tracks system performance and user interactions
 
 ## Installation
 
@@ -74,7 +52,7 @@ The application is organized into modular components:
    ```
 
 3. **Install Tesseract OCR**:
-   - **Windows**: Download from [GitHub](https://github.com/UB-Mannheim/tesseract/wiki)
+   - **Windows**: Download installer
    - **macOS**: `brew install tesseract`
    - **Linux**: `sudo apt-get install tesseract-ocr`
 
@@ -109,18 +87,6 @@ python -c "from ui import launch; launch()"
 ```
 This method directly calls the launch function from the command line.
 
-### What Happens When You Run It
-
-1. **Gradio UI Initialization**: The application starts the Gradio web interface
-2. **Local Server**: Typically runs on `http://127.0.0.1:7860` or the next available port
-3. **Browser Launch**: The interface should automatically open in your default browser
-4. **Ready State**: The application is ready to:
-   - Accept PDF document uploads
-   - Process documents with OCR and text extraction
-   - Answer questions using the RAG pipeline
-   - Handle voice input and output
-   - Export conversations and summaries
-
 ## Testing and Verification
 
 ### Test Setup Script (`test_setup.py`)
@@ -150,17 +116,6 @@ You can now run the application with: python run.py
 - **Import Errors**: Run `pip install -r requirements.txt` to install missing dependencies
 - **Configuration Issues**: Check that all files are in the correct locations
 - **Permission Errors**: Ensure you have write permissions in the project directory
-
-### Manual Testing
-
-You can also perform manual testing:
-
-```bash
-# Test individual components
-python -c "from config import *; print('Config loaded successfully')"
-python -c "from utils import *; print('Utils loaded successfully')"
-python -c "from main import EnhancedRAGChatbot; rag = EnhancedRAGChatbot(); print('System initialized')"
-```
 
 ## Usage
 
@@ -299,44 +254,6 @@ This will show detailed information about:
 - **No Data Storage**: Documents are processed in memory, not stored
 - **Export Control**: Users control what gets exported
 
-## Development
-
-### Project Structure
-
-```
-├── config.py              # Configuration management
-├── utils.py               # Core utilities and metrics
-├── document_processor.py  # Document processing pipeline
-├── rag_engine.py          # RAG implementation
-├── llm_interface.py       # LLM and speech integration
-├── export_manager.py      # Export functionality
-├── main.py                # Main application class
-├── ui.py                  # User interface
-├── run.py                 # Application launcher
-├── test_setup.py          # Setup verification
-├── requirements.txt       # Dependencies
-├── README.md             # Documentation
-└── LICENSE               # License information
-```
-
-### Adding New Features
-
-1. **New Document Types**: Extend `EnhancedDocumentProcessor`
-2. **Additional Languages**: Update `SUPPORTED_LANGUAGES` in config
-3. **Export Formats**: Add new formats to `ExportManager`
-4. **Search Methods**: Implement new retrieval methods in `AdvancedVectorStore`
-
-### Testing
-
-Run the included smoke tests:
-```bash
-python test_setup.py
-```
-
-For more comprehensive testing:
-```bash
-python -c "from main import EnhancedRAGChatbot; rag = EnhancedRAGChatbot(); print('System initialized successfully')"
-```
 
 ## Contributing
 
@@ -366,24 +283,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Sentence Transformers**: For semantic search capabilities
 - **Open Source Community**: For the various libraries and tools used
 
-## Support
-
-For support and questions:
-
-- **Issues**: Use the GitHub issues page
-- **Documentation**: Check this README and inline code comments
-- **Community**: Join our discussion forum
-
-## Version History
-
-### v1.0.0 (Current)
-- Initial release with full RAG pipeline
-- Multi-language support
-- Export functionality
-- Performance metrics
-- Speech interface
-- Modular architecture
-- Comprehensive testing suite
 
 ### Planned Features
 - Real-time collaboration
