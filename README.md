@@ -54,7 +54,7 @@ Open:
 
 You can configure runtime behavior via env vars (recommended for deployment):
 
-- `PORT` (Render-provided runtime port)
+- `PORT` (cloud runtime port, if provided by host)
 - `GRADIO_SERVER_PORT` (local fallback port)
 - `GRADIO_SERVER_NAME` (default `0.0.0.0`)
 - `GRADIO_SHARE` (`true/false`)
@@ -100,20 +100,22 @@ If your PDFs are very large, processing will still take time due to embedding/in
 - Download link appears only when a valid export path exists
 - Export formatter strips debug metadata and preserves readable structure
 
-## Render Deployment
+## Hugging Face Spaces Deployment
 
-This repo is prepared for Render:
-
-- `Dockerfile` included
-- `render.yaml` included
-- App reads `PORT` and server envs for cloud runtime
+Recommended free hosting target: **Hugging Face Spaces (Gradio SDK)**.
 
 ### Deploy Steps
 
 1. Push repo to GitHub
-2. In Render, create a new Blueprint (or Docker web service)
-3. Set required env vars (Gemini/Pinecone keys)
-4. Deploy
+2. Create a new Space on Hugging Face and choose **Gradio**
+3. Point the Space to this repository (or upload files directly)
+4. Add required secrets in Space settings:
+   - `DEFAULT_GEMINI_API_KEY`
+   - `DEFAULT_PINECONE_API_KEY`
+   - `PINECONE_INDEX_NAME` (e.g., `ragquery`)
+   - `PINECONE_CLOUD` (e.g., `aws`)
+   - `PINECONE_REGION` (e.g., `us-east-1`)
+5. Deploy the Space
 
 ## Troubleshooting
 

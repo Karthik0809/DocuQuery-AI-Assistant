@@ -16,7 +16,7 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 
 COPY . /app
 
-# Render provides PORT; fallback for local container runs
+# Cloud runtime port override; fallback for local container runs
 ENV PORT=7860
 ENV GRADIO_SERVER_NAME=0.0.0.0
 ENV GRADIO_SHARE=false

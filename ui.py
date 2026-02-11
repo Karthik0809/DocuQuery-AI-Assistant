@@ -345,9 +345,9 @@ def launch():
     print("Launching Enhanced RAG Chatbot...")
     print(f"Using Gemini model: {rag.gen.model_name}")
     print("SINGLE MODEL CONFIGURATION - No model selection needed!")
-    print("Simple browser launch - ready for Vercel deployment later!")
+    print("Simple browser launch - ready for cloud deployment.")
     
-    # Render and similar platforms provide PORT dynamically.
+    # Cloud platforms can provide PORT dynamically.
     port = int(os.environ.get("PORT", os.environ.get("GRADIO_SERVER_PORT", GRADIO_SERVER_PORT)))
     server_name = os.environ.get("GRADIO_SERVER_NAME", "0.0.0.0")
     share = os.environ.get("GRADIO_SHARE", "false").lower() in ("1", "true", "yes")
