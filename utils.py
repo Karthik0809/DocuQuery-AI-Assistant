@@ -20,7 +20,7 @@ for pkg in ("punkt","punkt_tab","stopwords"):
 from nltk.tokenize import sent_tokenize as _sent_tokenize
 from nltk.corpus import stopwords as _stopwords
 
-from config import MORTGAGE_KEYWORDS, MORTGAGE_NEGATIVE_KEYWORDS
+from config import DOMAIN_KEYWORDS, DOMAIN_NEGATIVE_KEYWORDS
 
 def ends_sentence(text: str) -> bool:
     s = text.strip()
@@ -33,15 +33,19 @@ def safe_sent_tokenize(text):
     try: return _sent_tokenize(text)
     except Exception: return re.split(r'(?<=[.!?])\s+', text)
 
-class MortgageHeuristics:
-    KEYWORDS = MORTGAGE_KEYWORDS
-    NEGATIVE = MORTGAGE_NEGATIVE_KEYWORDS
+class DomainHeuristics:
+    """Generic domain heuristics that work for all document types"""
+    KEYWORDS = DOMAIN_KEYWORDS
+    NEGATIVE = DOMAIN_NEGATIVE_KEYWORDS
     
     @staticmethod
     def domain_score(text: str) -> float:
+        """Calculate domain relevance score - returns 0 by default for generic use"""
+        if not DomainHeuristics.KEYWORDS and not DomainHeuristics.NEGATIVE:
+            return 0.0  # No domain-specific scoring for generic documents
         t = text.lower()
-        pos = sum(1 for k in MortgageHeuristics.KEYWORDS if k in t)
-        neg = sum(1 for k in MortgageHeuristics.NEGATIVE if k in t)
+        pos = sum(1 for k in DomainHeuristics.KEYWORDS if k in t) if DomainHeuristics.KEYWORDS else 0
+        neg = sum(1 for k in DomainHeuristics.NEGATIVE if k in t) if DomainHeuristics.NEGATIVE else 0
         return 0.03 * pos - 0.05 * neg
 
 class PerformanceMetrics:
@@ -125,7 +129,7 @@ class ResponseDebugInfo:
     """Formats debug information for responses"""
 
     @staticmethod
-    def format_debug_info(hits, method, confidence, response_time, retrieval_time, generation_time):
+    def format_debug_info(hits, method, confidence, response_time, retrieval_time, generation_time, question=None):
         """Format detailed debug information about the response"""
 
         debug_info = "\n\n---\n"
@@ -135,12 +139,52 @@ class ResponseDebugInfo:
 
         if hits:
             debug_info += "**Retrieved Chunks:**\n"
-            for i, hit in enumerate(hits[:3], 1):
-                preview = hit["text"][:150].replace('\n', ' ').strip()
-                if len(hit["text"]) > 150:
+            q = (question or "").lower()
+            q_tokens = [t for t in re.findall(r"[a-z0-9]+", q) if len(t) > 2]
+            stop = {"the", "and", "for", "with", "from", "this", "that", "what", "where", "when", "which", "who", "how"}
+            q_tokens = [t for t in q_tokens if t not in stop]
+
+            # De-duplicate near-identical chunk texts (common with hierarchical chunk types).
+            dedup_hits = []
+            seen = set()
+            for hit in hits:
+                norm = re.sub(r"\s+", " ", hit.get("text", "")).strip().lower()
+                # fingerprint first segment to collapse same-content different chunk-size views
+                fp = norm[:320]
+                if fp and fp not in seen:
+                    seen.add(fp)
+                    dedup_hits.append(hit)
+                if len(dedup_hits) >= 3:
+                    break
+
+            for i, hit in enumerate(dedup_hits, 1):
+                text = hit.get("text", "")
+                preview = ""
+                if text:
+                    sentences = safe_sent_tokenize(text)
+                    best_sent = ""
+                    best_score = -1
+                    for s in sentences:
+                        s_clean = re.sub(r"\s+", " ", s).strip()
+                        if len(s_clean.split()) < 5:
+                            continue
+                        sl = s_clean.lower()
+                        score = sum(1 for t in q_tokens if t in sl)
+                        if score > best_score:
+                            best_score = score
+                            best_sent = s_clean
+                    # If no sentence overlap found, fallback to beginning preview.
+                    if best_sent and best_score > 0:
+                        preview = best_sent[:220]
+                    else:
+                        preview = re.sub(r"\s+", " ", text).strip()[:150]
+                if len(preview) >= 150:
                     preview += "..."
                 relevance = hit.get("relevance", 0.0)
-                debug_info += f'{i}. *"{preview}"* (Similarity: {relevance:.3f})\n'
+                source_file = hit.get("source_file") or hit.get("metadata", {}).get("source_file", "unknown")
+                chunk_type = hit.get("metadata", {}).get("chunk_type", "medium")
+                debug_info += f'{i}. *"{preview}"*\n'
+                debug_info += f'   Source: {source_file} | Type: {chunk_type} | Similarity: {relevance:.3f}\n'
 
         return debug_info
 

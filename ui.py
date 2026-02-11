@@ -1,223 +1,338 @@
 # Gradio UI for Enhanced RAG Chatbot
 import gradio as gr
 from main import EnhancedRAGChatbot
-from config import DEFAULT_GEMINI_MODEL, DEFAULT_TOP_K, DEFAULT_CONFIDENCE_THRESHOLD, DEFAULT_USE_EXPANSION, DEFAULT_ENABLE_RERANKING, DEFAULT_MAX_TOKENS, DEFAULT_SHOW_DEBUG
+import os
+from config import (
+    DEFAULT_GEMINI_MODEL,
+    DEFAULT_TOP_K,
+    DEFAULT_CONFIDENCE_THRESHOLD,
+    DEFAULT_USE_EXPANSION,
+    DEFAULT_ENABLE_RERANKING,
+    DEFAULT_SHOW_DEBUG,
+    GRADIO_SERVER_PORT,
+)
 
 def launch():
     rag = EnhancedRAGChatbot()
+    
+    # Initial status from pre-defined keys
+    initial_gemini_status = f"**Gemini Ready!**\nModel: {rag.gen.model_name}\nStatus: Pre-configured" if rag.gen.api_key_set else "*API key not set*"
+    initial_pinecone_status = "**Vector store**\nConnected to Pinecone (cloud)." if getattr(rag.vs, "pinecone_index", None) is not None else "**Vector store**\nUsing local storage (FAISS)."
 
     def ui_clear():
         cleared_status, cleared_chat, cleared_stats = rag.clear()
         return (cleared_status, cleared_chat, cleared_stats, gr.update(value=None), gr.update(value=""),
-                gr.update(value=DEFAULT_TOP_K), gr.update(value=DEFAULT_CONFIDENCE_THRESHOLD), gr.update(value=DEFAULT_USE_EXPANSION), gr.update(value=DEFAULT_ENABLE_RERANKING),
-                gr.update(value=DEFAULT_MAX_TOKENS), gr.update(value=DEFAULT_SHOW_DEBUG), gr.update(value=""), gr.update(value="en"), 
-                gr.update(value="*Enter your Gemini API key above*"), gr.update(choices=["all"], value="all"))
+                gr.update(value=""), gr.update(value="en"),
+                gr.update(value="*API key not set*"),
+                gr.update(value="*Using local storage*"))
 
-    def reset_topk(): return DEFAULT_TOP_K
-    def reset_confidence(): return DEFAULT_CONFIDENCE_THRESHOLD
-    def reset_expansion(): return DEFAULT_USE_EXPANSION
-    def reset_reranking(): return DEFAULT_ENABLE_RERANKING
-    def reset_max_tokens(): return DEFAULT_MAX_TOKENS
-    def reset_debug(): return DEFAULT_SHOW_DEBUG
-
-    with gr.Blocks(title="Enhanced RAG Chatbot", theme=gr.themes.Soft()) as demo:
+    with gr.Blocks(title="DocuQuery AI - Document Q&A Assistant", theme=gr.themes.Soft()) as demo:
         # Header with title
-        gr.HTML("<h1>DocuQuery AI Assistant</h1>")
-        gr.HTML("<p>Your smart AI assistant for text-based PDFs — save hours by getting instant answers from your documents.</p>")
+        gr.HTML("<div style='text-align: center; padding: 20px;'><h1>📄 DocuQuery AI Assistant</h1><p style='font-size: 16px; color: #666;'>Ask questions about your PDF documents and get instant answers</p></div>")
 
         with gr.Row():
-            with gr.Column(scale=1):
-                # Gemini API Key Configuration
-                api_key = gr.Textbox(label="Google API Key (kept local to your session)", type="password", placeholder="Paste your key...")
-                gr.Markdown(f"*Using {DEFAULT_GEMINI_MODEL} for optimal performance*")
-                set_key_btn = gr.Button("Set Gemini Key", variant="primary")
-                gemini_status = gr.Markdown("*Enter your Gemini API key above*")
+            with gr.Column(scale=1, min_width=350):
+                # API Configuration Section
+                with gr.Accordion("🔑 API Configuration", open=True):
+                    api_key = gr.Textbox(
+                        label="Google Gemini API Key", 
+                        type="password", 
+                        placeholder="Pre-defined key in use. Enter to override...",
+                        info="Pre-configured key used by default. Override if needed."
+                    )
+                    set_key_btn = gr.Button("Set API Key", variant="primary", size="sm")
+                    gemini_status = gr.Markdown(initial_gemini_status, elem_classes=["status-text"])
+                    
+                    gr.Markdown("---")
+                    
+                    pinecone_api_key = gr.Textbox(
+                        label="Pinecone API Key (Optional)", 
+                        type="password", 
+                        placeholder="Pre-defined key in use. Enter to override...",
+                        info="Uses cloud vector database. Pre-configured key used by default."
+                    )
+                    set_pinecone_btn = gr.Button("Set Pinecone Key", variant="secondary", size="sm")
+                    pinecone_status = gr.Markdown(initial_pinecone_status, elem_classes=["status-text"])
 
-                files = gr.File(label="Upload PDF Documents", file_count="multiple", file_types=[".pdf"], type="filepath")
-                process_btn = gr.Button("Process Documents", variant="primary")
-                status = gr.Textbox(label="Processing Status", lines=15, interactive=False, value="Ready to process documents...")
+                # Document Upload Section
+                with gr.Accordion("📤 Upload Documents", open=True):
+                    files = gr.File(
+                        label="Upload PDF Files", 
+                        file_count="multiple", 
+                        file_types=[".pdf"], 
+                        type="filepath"
+                    )
+                    process_btn = gr.Button("Process Documents", variant="primary", size="lg")
+                    status = gr.Textbox(
+                        label="Status", 
+                        lines=8, 
+                        interactive=False, 
+                        value="Ready to process documents...",
+                        show_label=False
+                    )
 
-                with gr.Accordion("Smart Search Settings", open=False):
-                    gr.Markdown("### Search Configuration")
-                    
-                    with gr.Row():
-                        with gr.Column(scale=5):
-                            topk = gr.Slider(minimum=3, maximum=8, value=DEFAULT_TOP_K, step=1, label="Top-K Results", info="Number of chunks to retrieve")
-                        with gr.Column(scale=1, min_width=70):
-                            topk_reset = gr.Button("Reset", variant="secondary")
-                    
-                    with gr.Row():
-                        with gr.Column(scale=5):
-                            confidence_threshold = gr.Slider(minimum=0.0, maximum=0.8, value=DEFAULT_CONFIDENCE_THRESHOLD, step=0.05, label="Confidence Threshold", info="Minimum confidence for extractive answers")
-                        with gr.Column(scale=1, min_width=70):
-                            conf_reset = gr.Button("Reset", variant="secondary")
-                    
-                    gr.Markdown("### Query Enhancement")
-                    with gr.Row():
-                        with gr.Column(scale=5):
-                            use_expansion = gr.Checkbox(value=DEFAULT_USE_EXPANSION, label="Enable Query Expansion", info="Automatically expand queries with synonyms")
-                        with gr.Column(scale=1, min_width=70):
-                            exp_reset = gr.Button("Reset", variant="secondary")
-                    
-                    with gr.Row():
-                        with gr.Column(scale=5):
-                            enable_reranking = gr.Checkbox(value=DEFAULT_ENABLE_RERANKING, label="Enable Result Reranking", info="Improve result relevance with semantic reranking")
-                        with gr.Column(scale=1, min_width=70):
-                            rerank_reset = gr.Button("Reset", variant="secondary")
-                    
-                    gr.Markdown("### Answer Generation")
-                    with gr.Row():
-                        with gr.Column(scale=5):
-                            max_tokens = gr.Slider(minimum=0, maximum=600, value=DEFAULT_MAX_TOKENS, step=50, label="Max Answer Length", info="0 = Auto-determine optimal length")
-                        with gr.Column(scale=1, min_width=70):
-                            max_reset = gr.Button("Reset", variant="secondary")
-                    
-                    gr.Markdown("### Debug & Performance")
-                    with gr.Row():
-                        with gr.Column(scale=5):
-                            show_debug = gr.Checkbox(value=DEFAULT_SHOW_DEBUG, label="Show Debug Information", info="Display retrieval details and performance metrics")
-                        with gr.Column(scale=1, min_width=70):
-                            debug_reset = gr.Button("Reset", variant="secondary")
-
-                    with gr.Row():
-                        stats_btn = gr.Button("System Information", variant="secondary")
-                        metrics_btn = gr.Button("Performance Metrics", variant="secondary")
-                        reset_metrics_btn = gr.Button("Reset Metrics", variant="secondary")
-                    stats_box = gr.Textbox(label="System Information", lines=20, interactive=False)
-                
-                # Export Functionality
-                with gr.Accordion("Export & Share", open=False):
-                    gr.Markdown("### Export Options")
-                    with gr.Row():
-                        export_format = gr.Dropdown(choices=["pdf", "docx", "txt"], value="pdf", label="Export Format")
-                        export_filename = gr.Textbox(label="Filename (optional)", placeholder="Leave empty for auto-generated name")
-                    
-                    with gr.Row():
-                        export_conversation_btn = gr.Button("Export Conversation", variant="secondary")
-                    
-                    export_status = gr.Textbox(label="Export Status", lines=3, interactive=False, placeholder="Export status will appear here...")
-                    export_file_output = gr.File(label="Download Exported File", visible=False)
-
-                clear_btn = gr.Button("Clear All", variant="secondary")
-
-            with gr.Column(scale=2):
-                chat = gr.Chatbot(label="Enhanced RAG Assistant", height=600, show_label=True)
-                
-                # Language and Speech Controls
-                with gr.Row():
-                    with gr.Column(scale=1):
-                        gr.Markdown("**Language Settings:**")
-                        target_language = gr.Dropdown(
-                            choices=["en", "es", "fr", "de", "it", "pt", "ru", "ja", "ko", "zh", "ar", "hi"],
-                            value="en",
-                            label="Target Language",
-                            info="Language for answers"
-                        )
-
-                    with gr.Column(scale=1):
-                        gr.Markdown("**Speech Features:**")
-                        speech_btn = gr.Button("Speech Input", variant="secondary")
-                
-                # Document Section Selection
-                with gr.Row():
-                    gr.Markdown("**Select Document Section:**")
-                    document_selector = gr.Dropdown(
+                # Document Preview Section
+                with gr.Accordion("📄 Document Preview", open=False):
+                    doc_preview_select = gr.Dropdown(
                         choices=["all"],
                         value="all",
-                        label="Document Section",
-                        info="Choose specific section or 'all' for entire document"
+                        label="Select Document",
+                        info="View full text or browse chunks"
                     )
+                    preview_mode = gr.Radio(
+                        choices=["Full Text", "Browse Chunks", "Segmentation Info"],
+                        value="Full Text",
+                        label="Preview Mode"
+                    )
+                    preview_btn = gr.Button("View Preview", variant="secondary", size="sm")
+                    preview_output = gr.Markdown(
+                        label="Preview",
+                        show_label=False
+                    )
+
+                # System info (advanced knobs removed; app uses tuned defaults)
+                with gr.Accordion("⚙️ System Info", open=False):
+                    with gr.Row():
+                        stats_btn = gr.Button("📊 System Info", variant="secondary", size="sm")
+                        metrics_btn = gr.Button("📈 Performance", variant="secondary", size="sm")
+                    stats_box = gr.Textbox(label="Information", lines=15, interactive=False, visible=False)
                 
+                # Export Functionality
+                with gr.Accordion("💾 Export Conversation", open=False):
+                    export_format = gr.Dropdown(
+                        choices=["pdf", "docx", "txt"], 
+                        value="pdf", 
+                        label="Format"
+                    )
+                    export_filename = gr.Textbox(
+                        label="Filename (optional)", 
+                        placeholder="Leave empty for auto-generated name"
+                    )
+                    export_conversation_btn = gr.Button("Export", variant="secondary")
+                    export_status = gr.Textbox(
+                        label="Status", 
+                        lines=2, 
+                        interactive=False
+                    )
+                    export_file_output = gr.File(label="Download", visible=False)
+
+                clear_btn = gr.Button("🗑️ Clear All", variant="stop", size="lg")
+
+            with gr.Column(scale=2):
+                chat = gr.Chatbot(
+                    label="Chat", 
+                    height=650, 
+                    show_label=False,
+                    avatar_images=(None, "🤖")
+                )
+                
+                # Question Input Section
                 with gr.Row():
-                    question_input = gr.Textbox(placeholder="Ask any question about your documents...", lines=2, scale=4, label="Your Question")
-                    ask_btn = gr.Button("Ask", variant="primary", scale=1)
+                    question_input = gr.Textbox(
+                        placeholder="Ask any question about your documents...", 
+                        lines=2, 
+                        scale=5,
+                        show_label=False,
+                        container=False
+                    )
+                    ask_btn = gr.Button("Ask ➤", variant="primary", scale=1, size="lg")
+                    explain_more_btn = gr.Button("💡 Explain More", variant="secondary", scale=1, size="lg", visible=False)
+                
+                # Follow-up Suggestions
+                followup_suggestions = gr.Row(visible=False)
+                followup_suggestion_state = gr.State(value=["", "", "", ""])  # Store suggestion texts
+                with followup_suggestions:
+                    followup1 = gr.Button("", size="sm", visible=False, scale=1)
+                    followup2 = gr.Button("", size="sm", visible=False, scale=1)
+                    followup3 = gr.Button("", size="sm", visible=False, scale=1)
+                    followup4 = gr.Button("", size="sm", visible=False, scale=1)
+                
+                # Document Comparison
+                with gr.Accordion("🔀 Compare Documents", open=False):
+                    compare_doc1 = gr.Dropdown(
+                        choices=[],
+                        value=None,
+                        label="Document 1",
+                        info="Select first document"
+                    )
+                    compare_doc2 = gr.Dropdown(
+                        choices=[],
+                        value=None,
+                        label="Document 2",
+                        info="Select second document"
+                    )
+                    compare_question = gr.Textbox(
+                        label="Comparison Question (optional)",
+                        placeholder="Leave empty for general comparison",
+                        lines=2
+                    )
+                    compare_btn = gr.Button("Compare", variant="secondary", size="sm")
+                    compare_output = gr.Markdown(
+                        label="Comparison Result",
+                    )
+
+                # Optional Controls (collapsed by default)
+                with gr.Accordion("🌐 Language & Options", open=False):
+                    target_language = gr.Dropdown(
+                        choices=["en", "es", "fr", "de", "it", "pt", "ru", "ja", "ko", "zh", "ar", "hi"],
+                        value="en",
+                        label="Answer Language",
+                    )
 
         # Bind actions
         set_key_btn.click(fn=lambda k: rag.set_gemini(k), inputs=[api_key], outputs=[status, gemini_status], show_progress="hidden")
-        
-        # Update document selector when documents are processed
-        def update_document_selector():
-            print(f"update_document_selector called")
-            print(f"rag.processed: {rag.processed}")
-            print(f"rag.document_sections: {rag.document_sections}")
-            
-            if rag.processed:
-                choices = ["all"]
-                
-                # Add document sections if available
-                if rag.document_sections:
-                    for filename, sections in rag.document_sections.items():
-                        for section_name in sections.keys():
-                            # Format: "filename - section_name"
-                            section_option = f"{filename} - {section_name.replace('_', ' ').title()}"
-                            print(f"Adding section: {section_option}")
-                            choices.append(section_option)
-                
-                # Also add individual documents if no sections
-                if not rag.document_sections:
-                    for doc_info in rag.processed:
-                        filename = doc_info["file"]
-                        print(f"Adding document: {filename}")
-                        choices.append(filename)
-                
-                print(f"Updated document selector with choices: {choices}")
-                return gr.update(choices=choices, value="all")
-            
-            print("No documents processed yet, keeping default choices")
-            return gr.update(choices=["all"], value="all")
+        set_pinecone_btn.click(fn=lambda k: rag.set_pinecone(k), inputs=[pinecone_api_key], outputs=[status, pinecone_status], show_progress="hidden")
         
         # Process documents and then update document selector
         def process_and_update(files):
             # First process documents
             result = rag.process_documents(files)
-            # Then update document selector with sections
-            selector_update = update_document_selector()
+            preview_update = update_preview_selector()
+            comp1_update, comp2_update = update_comparison_selectors()
             print(f"Processing complete. Document sections available: {rag.document_sections}")
-            return result, selector_update
+            return result, preview_update, comp1_update, comp2_update
         
-        process_btn.click(fn=process_and_update, inputs=[files], outputs=[status, document_selector], show_progress="full")
+        process_btn.click(fn=process_and_update, inputs=[files], outputs=[status, doc_preview_select, compare_doc1, compare_doc2], show_progress="full")
+        
+        # Update document preview selector
+        def update_preview_selector():
+            if rag.processed:
+                choices = ["all"] + [d['file'] for d in rag.processed]
+                return gr.update(choices=choices, value="all")
+            return gr.update(choices=["all"], value="all")
+        
+        # Update comparison selectors (no "all" option)
+        def update_comparison_selectors():
+            if rag.processed and len(rag.processed) >= 2:
+                choices = [d['file'] for d in rag.processed]
+                return gr.update(choices=choices, value=choices[0] if len(choices) > 0 else None), \
+                       gr.update(choices=choices, value=choices[1] if len(choices) > 1 else choices[0] if len(choices) > 0 else None)
+            return gr.update(choices=[], value=None), gr.update(choices=[], value=None)
+        
+        # Document preview handler
+        def show_preview(doc_name, mode):
+            if mode == "Full Text":
+                return rag.get_document_preview(doc_name if doc_name != "all" else None)
+            elif mode == "Browse Chunks":
+                return rag.browse_chunks(doc_name if doc_name != "all" else None)
+            else:  # Segmentation Info
+                return rag.get_document_segmentation(doc_name if doc_name != "all" else None)
         
         # Handle queries with document and language support
-        def handle_query(question, history, selected_doc, k, conf, exp, rerank, mt, debug, target_lang):
+        def handle_query(question, history, target_lang):
+            # Advanced settings removed from UI; keep tuned defaults in config.
+            k = DEFAULT_TOP_K
+            conf = DEFAULT_CONFIDENCE_THRESHOLD
+            exp = DEFAULT_USE_EXPANSION
+            rerank = DEFAULT_ENABLE_RERANKING
+            debug = DEFAULT_SHOW_DEBUG
+            max_tokens = 0
             if target_lang != "en":
                 # Use bilingual answer method
-                return rag.answer_with_translation(question, history, target_lang, k, conf, exp, rerank, mt, debug)
+                empty, new_history = rag.answer_with_translation(question, history, target_lang, k, conf, exp, rerank, max_tokens, debug)
             else:
                 # Use regular answer method for all documents
-                return rag.answer(question, history, k, conf, exp, mt, rerank, debug)
+                empty, new_history = rag.answer(question, history, k, conf, exp, max_tokens, rerank, debug)
+            
+            # Show "Explain More" button and follow-up suggestions if answer was generated
+            show_explain = len(new_history) > len(history) and len(new_history[-1][1]) > 50
+            suggestions = []
+            if show_explain:
+                # Get follow-up suggestions
+                hits, _ = rag.vs.search(question, top_k=5)
+                suggestions = rag.get_followup_suggestions(question, hits)
+            
+            # Update follow-up buttons and state
+            followup_updates = []
+            followup_state_list = []
+            for i, sug in enumerate(suggestions[:4]):
+                followup_updates.append(gr.update(value=sug, visible=True))
+                followup_state_list.append(sug)
+            while len(followup_updates) < 4:
+                followup_updates.append(gr.update(visible=False))
+                followup_state_list.append("")
+            
+            return empty, new_history, gr.update(visible=show_explain), gr.update(visible=len(suggestions) > 0), followup_state_list, *followup_updates
         
         ask_btn.click(fn=handle_query,
-                      inputs=[question_input, chat, document_selector, topk, confidence_threshold, use_expansion, enable_reranking, max_tokens, show_debug, target_language],
-                      outputs=[question_input, chat], show_progress="full")
+                      inputs=[question_input, chat, target_language],
+                      outputs=[question_input, chat, explain_more_btn, followup_suggestions, followup_suggestion_state, followup1, followup2, followup3, followup4], show_progress="full")
         question_input.submit(fn=handle_query,
-                              inputs=[question_input, chat, document_selector, topk, confidence_threshold, use_expansion, enable_reranking, max_tokens, show_debug, target_language],
-                              outputs=[question_input, chat], show_progress="full")
+                              inputs=[question_input, chat, target_language],
+                              outputs=[question_input, chat, explain_more_btn, followup_suggestions, followup_suggestion_state, followup1, followup2, followup3, followup4], show_progress="full")
         
-        # Speech and Language Features
-        speech_btn.click(fn=rag.speech_to_text, outputs=[question_input], show_progress="full")
+        # Answer refinement
+        def handle_explain_more(history):
+            if not history or len(history) == 0:
+                return "", history
+            last_q, last_a = history[-1]
+            refined_q = f"Provide more detailed information about: {last_q}"
+            return rag.refine_answer(refined_q, history)
+        
+        explain_more_btn.click(fn=handle_explain_more, inputs=[chat], outputs=[question_input, chat], show_progress="full")
+        
+        # Follow-up suggestions - use state to get suggestion text
+        def use_followup1(history, state):
+            if state and len(state) > 0 and state[0]:
+                return rag.answer(state[0], history, k=8, confidence_threshold=0.2)
+            return "", history
+        def use_followup2(history, state):
+            if state and len(state) > 1 and state[1]:
+                return rag.answer(state[1], history, k=8, confidence_threshold=0.2)
+            return "", history
+        def use_followup3(history, state):
+            if state and len(state) > 2 and state[2]:
+                return rag.answer(state[2], history, k=8, confidence_threshold=0.2)
+            return "", history
+        def use_followup4(history, state):
+            if state and len(state) > 3 and state[3]:
+                return rag.answer(state[3], history, k=8, confidence_threshold=0.2)
+            return "", history
+        
+        followup1.click(fn=use_followup1, inputs=[chat, followup_suggestion_state], outputs=[question_input, chat], show_progress="full")
+        followup2.click(fn=use_followup2, inputs=[chat, followup_suggestion_state], outputs=[question_input, chat], show_progress="full")
+        followup3.click(fn=use_followup3, inputs=[chat, followup_suggestion_state], outputs=[question_input, chat], show_progress="full")
+        followup4.click(fn=use_followup4, inputs=[chat, followup_suggestion_state], outputs=[question_input, chat], show_progress="full")
+        
+        # Document preview
+        process_btn.click(fn=update_preview_selector, outputs=[doc_preview_select], show_progress="hidden").then(
+            fn=update_preview_selector, outputs=[compare_doc1]
+        ).then(
+            fn=update_preview_selector, outputs=[compare_doc2]
+        )
+        preview_btn.click(fn=show_preview, inputs=[doc_preview_select, preview_mode], outputs=[preview_output], show_progress="full")
+        
+        # Document comparison
+        def handle_compare(doc1, doc2, question):
+            if not doc1 or not doc2:
+                return "Please select two documents to compare."
+            if doc1 == doc2:
+                return "Please select two different documents."
+            return rag.compare_documents(doc1, doc2, question if question and question.strip() else None)
+        
+        compare_btn.click(fn=handle_compare, inputs=[compare_doc1, compare_doc2, compare_question], outputs=[compare_output], show_progress="full")
+        
+        # Stats box visibility toggle
+        stats_btn.click(fn=lambda: rag.stats(), outputs=[stats_box], show_progress="hidden").then(
+            fn=lambda: gr.update(visible=True), outputs=[stats_box]
+        )
+        metrics_btn.click(fn=lambda: rag.get_performance_metrics(), outputs=[stats_box], show_progress="hidden").then(
+            fn=lambda: gr.update(visible=True), outputs=[stats_box]
+        )
 
-        stats_btn.click(fn=rag.stats, outputs=[stats_box], show_progress="hidden")
-        metrics_btn.click(fn=rag.get_performance_metrics, outputs=[stats_box], show_progress="hidden")
-        reset_metrics_btn.click(fn=rag.reset_metrics, outputs=[stats_box], show_progress="hidden")
-
-        topk_reset.click(fn=reset_topk, outputs=[topk], show_progress="hidden")
-        conf_reset.click(fn=reset_confidence, outputs=[confidence_threshold], show_progress="hidden")
-        exp_reset.click(fn=reset_expansion, outputs=[use_expansion], show_progress="hidden")
-        rerank_reset.click(fn=reset_reranking, outputs=[enable_reranking], show_progress="hidden")
-        max_reset.click(fn=reset_max_tokens, outputs=[max_tokens], show_progress="hidden")
-        debug_reset.click(fn=reset_debug, outputs=[show_debug], show_progress="hidden")
-
-        clear_btn.click(fn=ui_clear, outputs=[status, chat, stats_box, files, question_input, topk, confidence_threshold,
-                                              use_expansion, enable_reranking, max_tokens, show_debug, api_key, target_language, gemini_status, document_selector],
-                        show_progress="hidden")
+        clear_btn.click(fn=ui_clear, outputs=[status, chat, stats_box, files, question_input,
+                                              api_key, target_language, gemini_status, pinecone_status],
+                        show_progress="hidden").then(
+            fn=lambda: gr.update(visible=False), outputs=[stats_box]
+        )
         
         # Export functionality
         def handle_conversation_export(fmt, filename, chat_history):
             result = rag.export_conversation(chat_history, fmt, filename)
-            if result[0]:  # If file was created
+            if result[0] and os.path.exists(result[0]):  # If file was created
                 return result[1], gr.update(value=result[0], visible=True)
             else:
-                return result[1], gr.update(visible=False)
+                return result[1], gr.update(value=None, visible=False)
         
         export_conversation_btn.click(
             fn=handle_conversation_export,
@@ -228,17 +343,42 @@ def launch():
 
     # Simple launch - just open in browser
     print("Launching Enhanced RAG Chatbot...")
-    print(f"Using Gemini model: {DEFAULT_GEMINI_MODEL}")
+    print(f"Using Gemini model: {rag.gen.model_name}")
     print("SINGLE MODEL CONFIGURATION - No model selection needed!")
     print("Simple browser launch - ready for Vercel deployment later!")
     
-    # Simple launch - just open in browser
-    print("Opening in browser...")
-    demo.launch(
-        debug=True,
-        show_error=True,
-        quiet=False
-    )
+    # Render and similar platforms provide PORT dynamically.
+    port = int(os.environ.get("PORT", os.environ.get("GRADIO_SERVER_PORT", GRADIO_SERVER_PORT)))
+    server_name = os.environ.get("GRADIO_SERVER_NAME", "0.0.0.0")
+    share = os.environ.get("GRADIO_SHARE", "false").lower() in ("1", "true", "yes")
+    print(f"Opening in browser with PWA support (port {port})...")
+    # Try to launch on specified port, but allow Gradio to find an available port if needed
+    import socket
+    def is_port_available(port):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            return s.connect_ex(('localhost', port)) != 0
+    
+    # If port is not available, let Gradio find one automatically
+    if not is_port_available(port):
+        print(f"Port {port} is in use, Gradio will find an available port automatically...")
+        demo.launch(
+            debug=True,
+            show_error=True,
+            quiet=False,
+            pwa=True,
+            share=share,
+            server_name=server_name
+        )
+    else:
+        demo.launch(
+            debug=True,
+            show_error=True,
+            quiet=False,
+            pwa=True,
+            server_port=port,
+            share=share,
+            server_name=server_name
+        )
 
 if __name__ == "__main__":
     launch()

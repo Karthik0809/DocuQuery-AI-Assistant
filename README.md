@@ -1,296 +1,146 @@
-# DocuQuery AI Assistant - Enhanced RAG Chatbot
+# DocuQuery AI Assistant
 
-A sophisticated AI-powered document question-answering system designed specifically for mortgage and financial documents. This application uses advanced Retrieval-Augmented Generation (RAG) techniques to provide accurate, context-aware answers from PDF documents.
+Gradio-based RAG application for querying PDF documents with hybrid retrieval, Gemini generation, and optional Pinecone cloud search.
 
-## Features
-- **Multi-Modal PDF Processing** – OCR for scanned + digital documents  
-- **Advanced RAG Pipeline** – Hybrid search, reranking, extractive QA  
-- **Domain-Optimized** – Tailored for mortgage & financial docs  
-- **Multi-Language Support** – 12+ languages with translation  
-- **Speech Interface** – Voice input and text-to-speech  
-- **Performance Metrics** – Accuracy, latency, and user analytics  
-- **Export Options** – Save chats to PDF, Word, or plain text  
+This project is domain-agnostic (works across general document types), with a simplified UI and improved readability for answers, previews, comparisons, and exports.
 
-## Architecture
+## What It Does
 
-The application is organized into modular components:
+- Upload and process one or more PDFs (text-based extraction via `pypdf`)
+- Ask natural-language questions over processed documents
+- Generate summaries, key points, and detailed follow-ups
+- Compare two documents with structured markdown output
+- Preview full extracted text, chunk views, and segmentation info
+- Export chat to `txt`, `pdf`, or `docx`
 
+## Current Architecture
+
+- `document_processor.py`: PDF extraction + section detection
+- `rag_engine.py`: chunking, embeddings, FAISS/BM25/TF-IDF, optional Pinecone
+- `llm_interface.py`: Gemini configuration and generation
+- `langgraph_orchestrator.py`: LangGraph routing (summary, refine, compare, QA)
+- `main.py`: app orchestration logic
+- `ui.py`: Gradio UI
+- `export_manager.py`: export pipeline and formatting
+
+## Key Features
+
+- Hybrid retrieval: semantic + lexical + reranking
+- LangGraph orchestration with safe fallback paths
+- Dynamic Gemini model selection (auto-switches to available model)
+- Optional Pinecone integrated embeddings (`ragquery` flow supported)
+- Better debug evidence display (deduped and query-focused snippets)
+- Cleaner UI (removed low-value controls)
+
+## Quick Start
+
+### 1) Install
+
+```bash
+pip install -r requirements.txt
 ```
-├── config.py              # Configuration and constants
-├── utils.py               # Utility functions and helper classes
-├── document_processor.py  # PDF processing and OCR
-├── rag_engine.py          # RAG pipeline and vector search
-├── llm_interface.py       # LLM integration and speech processing
-├── export_manager.py      # Export functionality
-├── main.py                # Main application logic
-├── ui.py                  # Gradio user interface
-├── run.py                 # Application launcher script
-├── test_setup.py          # Setup verification and testing
-├── requirements.txt       # Dependencies
-├── README.md             # Documentation
-└── LICENSE               # License information
-```
 
-## Installation
+### 2) Run
 
-### Prerequisites
-- Python 3.8 or higher
-- Google Gemini API key
-- Tesseract OCR (for scanned document processing)
-
-### Setup Instructions
-
-1. **Clone the repository**:
-   ```bash
-   git clone <repository-url>
-   cd DocuQuery-AI-Assistant
-   ```
-
-2. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. **Install Tesseract OCR**:
-   - **Windows**: Download installer
-   - **macOS**: `brew install tesseract`
-   - **Linux**: `sudo apt-get install tesseract-ocr`
-
-4. **Get Google Gemini API Key**:
-   - Visit [Google AI Studio](https://makersuite.google.com/app/apikey)
-   - Create a new API key
-   - Keep it secure for use in the application
-
-5. **Verify Setup**:
-   ```bash
-   python test_setup.py
-   ```
-   This will test all module imports and verify the system is ready to run.
-
-## Running the Application
-
-### Option 1: Using the Launcher Script (Recommended)
 ```bash
 python run.py
 ```
-The `run.py` script is a simple launcher that imports and calls the `launch()` function from `ui.py`. This is the recommended way to start the application as it provides a clean entry point.
 
-### Option 2: Direct Execution
-```bash
-python ui.py
-```
-This directly runs the Gradio interface by executing the `ui.py` file.
+Open:
 
-### Option 3: Using Gradio Directly
-```bash
-python -c "from ui import launch; launch()"
-```
-This method directly calls the launch function from the command line.
+- `http://127.0.0.1:7880` (or next available port)
 
-## Testing and Verification
+## Environment Variables
 
-### Test Setup Script (`test_setup.py`)
+You can configure runtime behavior via env vars (recommended for deployment):
 
-The `test_setup.py` script is a comprehensive verification tool that ensures your environment is properly configured:
+- `PORT` (Render-provided runtime port)
+- `GRADIO_SERVER_PORT` (local fallback port)
+- `GRADIO_SERVER_NAME` (default `0.0.0.0`)
+- `GRADIO_SHARE` (`true/false`)
+- `DEFAULT_GEMINI_API_KEY`
+- `DEFAULT_PINECONE_API_KEY`
+- `DEFAULT_GEMINI_MODEL`
+- `PINECONE_INDEX_NAME`
+- `PINECONE_CLOUD`
+- `PINECONE_REGION`
+- `USE_OPENAI_EMBEDDINGS`
+- `OPENAI_API_KEY`
 
-#### What It Tests:
-- **Module Imports**: Verifies all Python modules can be imported successfully
-- **Class Instantiation**: Tests that the main `EnhancedRAGChatbot` class can be created
-- **Dependency Check**: Ensures all required packages are installed
-- **Configuration Validation**: Checks that configuration files are accessible
+## UI Overview
 
-#### Running the Tests:
-```bash
-python test_setup.py
-```
+Left panel:
 
-#### Expected Output:
-```
-✓ Testing module imports...
-✓ Testing main class instantiation...
-✓ All tests passed! The setup is working correctly.
-You can now run the application with: python run.py
-```
+- API configuration (Gemini, Pinecone)
+- Upload + process
+- Document preview
+- System info
+- Export conversation
 
-#### If Tests Fail:
-- **Import Errors**: Run `pip install -r requirements.txt` to install missing dependencies
-- **Configuration Issues**: Check that all files are in the correct locations
-- **Permission Errors**: Ensure you have write permissions in the project directory
+Main panel:
 
-## Usage
+- Chat + Ask + Explain More
+- Follow-up suggestion chips
+- Compare documents section
+- Language selector
 
-### Getting Started
+## Notes on Processing Speed
 
-1. **Launch the Application**: Run `python run.py` to start the web interface
-2. **Configure API Key**: Enter your Google Gemini API key in the left panel
-3. **Upload Documents**: Upload PDF files (supports multiple files)
-4. **Process Documents**: Click "Process Documents" to extract and index content
-5. **Ask Questions**: Use the chat interface to ask questions about your documents
+Processing has been optimized by:
 
-### Advanced Features
+- using faster embedding model defaults (`all-MiniLM-L6-v2`)
+- reducing chunk scale count (fewer chunk variants)
 
-#### Document Section Selection
-- Choose specific document sections for targeted queries
-- Automatic section detection for mortgage documents
-- Support for custom document types
+If your PDFs are very large, processing will still take time due to embedding/indexing.
 
-#### Language Support
-- Automatic language detection
-- Multi-language Q&A with translation
-- Support for 12+ languages including:
-  - English, Spanish, French, German
-  - Italian, Portuguese, Russian, Japanese
-  - Korean, Chinese, Arabic, Hindi
+## Export Behavior
 
-#### Export Options
-- Export conversations to PDF, Word, or text formats
-- Customizable filenames and formats
-- Professional formatting with timestamps
+- Exports support `txt`, `pdf`, `docx`
+- If PDF/DOCX dependency is unavailable, export falls back to TXT
+- Download link appears only when a valid export path exists
+- Export formatter strips debug metadata and preserves readable structure
 
-#### Performance Tuning
-- Adjustable confidence thresholds
-- Query expansion controls
-- Result reranking options
-- Debug information display
+## Render Deployment
 
-## Configuration
+This repo is prepared for Render:
 
-### Key Settings
+- `Dockerfile` included
+- `render.yaml` included
+- App reads `PORT` and server envs for cloud runtime
 
-The application can be customized through `config.py`:
+### Deploy Steps
 
-```python
-# Model Configuration
-DEFAULT_GEMINI_MODEL = "gemini-1.5-flash"
-
-# Performance Settings
-DEFAULT_TOP_K = 5
-DEFAULT_CONFIDENCE_THRESHOLD = 0.3
-DEFAULT_USE_EXPANSION = True
-DEFAULT_ENABLE_RERANKING = True
-
-# OCR Settings
-DEFAULT_DPI = 300
-OCR_CONFIG = "--oem 3 --psm 6 ..."
-
-# Chunking Settings
-TARGET_TOKENS = 300
-OVERLAP_SENTENCES = 2
-BOUNDARY_DROP = 0.15
-```
-
-### Domain Customization
-
-The system is optimized for mortgage documents but can be adapted for other domains:
-
-1. **Update Keywords**: Modify `MORTGAGE_KEYWORDS` in `config.py`
-2. **Adjust Heuristics**: Customize domain scoring in `utils.py`
-3. **Add Parsers**: Extend `MortgageParser` class for new document types
-
-## Performance Metrics
-
-The system provides comprehensive performance tracking:
-
-- **Retrieval Performance**: Hit rates, relevance scores, latency
-- **Answer Quality**: Confidence scores, answer completeness
-- **System Performance**: Response times, throughput, error rates
-- **User Analytics**: Query patterns, document usage statistics
+1. Push repo to GitHub
+2. In Render, create a new Blueprint (or Docker web service)
+3. Set required env vars (Gemini/Pinecone keys)
+4. Deploy
 
 ## Troubleshooting
 
-### Common Issues and Solutions
+### App not reachable
 
-#### 1. Module Import Errors
-**Problem**: `ModuleNotFoundError` when running the application
-**Solution**: 
-```bash
-pip install -r requirements.txt
-python test_setup.py
-```
+- Kill stale Python processes and restart
+- Check `PORT` / `GRADIO_SERVER_PORT`
+- Try both `127.0.0.1` and `localhost`
 
-#### 2. Tesseract OCR Not Found
-**Problem**: OCR functionality not working
-**Solution**: 
-- **Windows**: Download and install Tesseract from [GitHub](https://github.com/UB-Mannheim/tesseract/wiki)
-- **macOS**: `brew install tesseract`
-- **Linux**: `sudo apt-get install tesseract-ocr`
+### Gemini model not found (404)
 
-#### 3. API Key Issues
-**Problem**: "Invalid API key" errors
-**Solution**: 
-- Verify your Google Gemini API key is correct
-- Ensure you have sufficient API quota
-- Check that the API key is active and not expired
+- Handled automatically: app lists available models and switches to a supported one
 
-#### 4. Port Already in Use
-**Problem**: Gradio can't start due to port conflicts
-**Solution**: The application will automatically find an available port, or you can specify a custom port in the code
+### `list indices must be integers or slices, not float`
 
-#### 5. Memory Issues
-**Problem**: Application crashes with large documents
-**Solution**: 
-- Process documents one at a time
-- Reduce `DEFAULT_TOP_K` in config.py
-- Close other applications to free memory
+- Fixed in Pinecone metadata handling by safe integer casting for `idx`
 
-### Debug Mode
+### Download not working
 
-Enable debug information by modifying the configuration:
-```python
-# In config.py or through the UI
-DEBUG_MODE = True
-```
+- Ensure export status shows success
+- File output is shown only when a valid export path exists
 
-This will show detailed information about:
-- Document processing steps
-- Retrieval performance
-- Answer generation process
-- System resource usage
+## Security
 
-## Security & Privacy
-
-- **Local Processing**: All document processing happens locally
-- **API Key Security**: API keys are stored in session memory only
-- **No Data Storage**: Documents are processed in memory, not stored
-- **Export Control**: Users control what gets exported
-
-
-## Contributing
-
-We welcome contributions! Please follow these guidelines:
-
-1. **Fork the repository**
-2. **Create a feature branch**: `git checkout -b feature/new-feature`
-3. **Make your changes**: Follow the existing code style
-4. **Test thoroughly**: Ensure all functionality works
-5. **Submit a pull request**: Include detailed description of changes
-
-### Code Style
-
-- Follow PEP 8 guidelines
-- Use type hints where appropriate
-- Add docstrings for all functions and classes
-- Keep functions focused and modular
+- Use env vars for keys in deployment
+- Do not commit real credentials
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- **Google Gemini**: For providing the LLM capabilities
-- **Gradio**: For the excellent web interface framework
-- **Sentence Transformers**: For semantic search capabilities
-- **Open Source Community**: For the various libraries and tools used
-
-
-### Planned Features
-- Real-time collaboration
-- Advanced document analytics
-- Custom model fine-tuning
-- API endpoints for integration
-- Mobile application
-
----
-
-**Note**: This application requires a Google Gemini API key for full functionality. The API key is used only for text generation and is not stored permanently.
+MIT — see `LICENSE`.

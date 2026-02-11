@@ -46,6 +46,7 @@ class ExportManager:
         if not filename:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"conversation_{timestamp}"
+        filename = self._safe_filename(filename)
         
         try:
             if format_type == "pdf":
@@ -53,13 +54,15 @@ class ExportManager:
                     filepath = self._export_to_pdf(conversation_history, filename)
                     return (filepath, f"Conversation exported to PDF: {os.path.basename(filepath)}")
                 else:
-                    return (None, "PDF export not available. ReportLab package not installed. Falling back to TXT format.")
+                    filepath = self._export_to_txt(conversation_history, filename)
+                    return (filepath, f"PDF export unavailable. Exported as TXT: {os.path.basename(filepath)}")
             elif format_type == "docx":
                 if DOCX_AVAILABLE:
                     filepath = self._export_to_docx(conversation_history, filename)
                     return (filepath, f"Conversation exported to Word: {os.path.basename(filepath)}")
                 else:
-                    return (None, "Word export not available. python-docx package not installed. Falling back to TXT format.")
+                    filepath = self._export_to_txt(conversation_history, filename)
+                    return (filepath, f"Word export unavailable. Exported as TXT: {os.path.basename(filepath)}")
             elif format_type == "txt":
                 filepath = self._export_to_txt(conversation_history, filename)
                 return (filepath, f"Conversation exported to text: {os.path.basename(filepath)}")
@@ -181,7 +184,25 @@ class ExportManager:
             
             # Clean and format the answer text
             formatted_answer = self._format_answer_text(answer)
-            story.append(Paragraph(formatted_answer, a_style))
+            bullet_style = ParagraphStyle(
+                'AnswerBullet',
+                parent=styles['Normal'],
+                fontSize=10,
+                leftIndent=34,
+                bulletIndent=20,
+                leading=14,
+                spaceAfter=3,
+                fontName='Helvetica'
+            )
+            for line in formatted_answer.split('\n'):
+                line = line.strip()
+                if not line:
+                    story.append(Spacer(1, 4))
+                    continue
+                if line.startswith("- "):
+                    story.append(Paragraph(line[2:], bullet_style, bulletText="•"))
+                else:
+                    story.append(Paragraph(line, a_style))
             
             # Add separator line between Q&A pairs
             if i < len(conversation):
@@ -196,24 +217,28 @@ class ExportManager:
         """Format answer text for better readability"""
         if not text:
             return ""
-        
-        # Remove debug information and metadata
-        text = re.sub(r'\*\*Method Used:\*\*.*?\)', '', text, flags=re.DOTALL)
-        text = re.sub(r'\*\*Confidence Score:\*\*.*?\)', '', text, flags=re.DOTALL)
-        text = re.sub(r'\*\*Response Time:\*\*.*?\)', '', text, flags=re.DOTALL)
-        text = re.sub(r'\*\*Retrieved Chunks:\*\*.*?\)', '', text, flags=re.DOTALL)
-        
-        # Clean up extra whitespace and line breaks
-        text = re.sub(r'\n+', '\n', text)
-        text = re.sub(r' +', ' ', text)
-        text = re.sub(r'---\s*', '', text)
-        
-        # Ensure proper sentence endings
-        text = text.strip()
-        if text and not text.endswith(('.', '!', '?')):
-            text += '.'
-        
-        return text
+
+        # Remove appended debug block from UI answers.
+        if "\n\n---\n" in text:
+            text = text.split("\n\n---\n", 1)[0]
+
+        # Normalize markdown-ish formatting while preserving structure.
+        text = text.replace("\r\n", "\n")
+        text = re.sub(r'`([^`]*)`', r'\1', text)            # inline code
+        text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)      # bold
+        text = re.sub(r'__([^_]+)__', r'\1', text)          # bold alt
+        text = re.sub(r'(?m)^\s*#{1,6}\s*', '', text)       # headings
+        text = re.sub(r'[ \t]+', ' ', text)
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        return text.strip()
+
+    def _safe_filename(self, filename):
+        """Make filename safe and extension-neutral."""
+        base = (filename or "conversation").strip()
+        base = re.sub(r"\.(pdf|docx|txt)$", "", base, flags=re.I)
+        base = re.sub(r'[^A-Za-z0-9._ -]+', '_', base)
+        base = base.strip(" .")
+        return base or "conversation"
     
     def _export_to_docx(self, conversation, filename):
         """Export conversation to Word document"""
@@ -249,10 +274,20 @@ class ExportManager:
             
             # Answer text with formatting
             formatted_answer = self._format_answer_text(answer)
-            a_text = doc.add_paragraph(formatted_answer)
-            a_text.style.font.size = Pt(10)
-            a_text.style.font.name = 'Calibri'
-            a_text.paragraph_format.left_indent = Inches(0.2)
+            for line in formatted_answer.split('\n'):
+                line = line.strip()
+                if not line:
+                    doc.add_paragraph()
+                    continue
+                if line.startswith("- "):
+                    p = doc.add_paragraph(style='List Bullet')
+                    run = p.add_run(line[2:])
+                else:
+                    p = doc.add_paragraph(line)
+                    run = p.runs[0]
+                run.font.size = Pt(10)
+                run.font.name = 'Calibri'
+                p.paragraph_format.left_indent = Inches(0.2)
             
             # Add spacing between Q&A pairs
             if i < len(conversation):
