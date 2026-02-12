@@ -11,6 +11,7 @@ from config import (
     DEFAULT_ENABLE_RERANKING,
     DEFAULT_SHOW_DEBUG,
     GRADIO_SERVER_PORT,
+    SUPPORTED_LANGUAGES,
 )
 
 def _apply_gradio_api_info_hotfix():
@@ -307,7 +308,7 @@ def launch():
                 # Optional Controls (collapsed by default)
                 with gr.Accordion("🌐 Language & Options", open=False):
                     target_language = gr.Dropdown(
-                        choices=["en", "es", "fr", "de", "it", "pt", "ru", "ja", "ko", "zh", "ar", "hi"],
+                        choices=[(name, code) for code, name in SUPPORTED_LANGUAGES.items()],
                         value="en",
                         label="Answer Language",
                     )

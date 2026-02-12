@@ -69,7 +69,8 @@ SUPPORTED_LANGUAGES = {
     'ko': 'Korean',
     'zh': 'Chinese',
     'ar': 'Arabic',
-    'hi': 'Hindi'
+    'hi': 'Hindi',
+    'te': 'Telugu'
 }
 
 # Export formats
