@@ -12,7 +12,33 @@ from config import (
     GRADIO_SERVER_PORT,
 )
 
+def _apply_gradio_api_info_hotfix():
+    """
+    Work around Gradio schema parsing crashes seen on Spaces for some
+    component schemas (e.g., additionalProperties=true).
+    """
+    try:
+        from gradio.blocks import Blocks
+    except Exception:
+        return
+
+    if getattr(Blocks, "_docuquery_api_info_patched", False):
+        return
+
+    original_get_api_info = Blocks.get_api_info
+
+    def _safe_get_api_info(self):
+        try:
+            return original_get_api_info(self)
+        except Exception as e:
+            print(f"Gradio API info generation failed; continuing without API metadata: {e}")
+            return {"named_endpoints": {}, "unnamed_endpoints": {}}
+
+    Blocks.get_api_info = _safe_get_api_info
+    Blocks._docuquery_api_info_patched = True
+
 def launch():
+    _apply_gradio_api_info_hotfix()
     rag = EnhancedRAGChatbot()
     
     # Initial status from pre-defined keys
