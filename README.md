@@ -16,6 +16,10 @@ Gradio-based RAG application for querying PDF documents with hybrid retrieval, G
 
 This project is domain-agnostic (works across general document types), with a simplified UI and improved readability for answers, previews, comparisons, and exports.
 
+## Live Demo
+
+- Hugging Face Space: `https://huggingface.co/spaces/karthikmulugu08/docuquery-ai-assistant`
+
 ## What It Does
 
 - Upload and process one or more PDFs (text-based extraction via `pypdf`)
@@ -91,8 +95,8 @@ Left panel:
 
 Main panel:
 
-- Chat + Ask + Explain More
-- Follow-up suggestion chips
+- Chat + Ask
+- Per-reply inline info toggle (`i`) for method/confidence/timing/chunks
 - Compare documents section
 - Language selector
 
@@ -115,6 +119,10 @@ If your PDFs are very large, processing will still take time due to embedding/in
 ## Hugging Face Spaces Deployment
 
 Recommended free hosting target: **Hugging Face Spaces (Gradio SDK)**.
+
+Live Space URL:
+
+- `https://huggingface.co/spaces/karthikmulugu08/docuquery-ai-assistant`
 
 ### Deploy Steps
 
