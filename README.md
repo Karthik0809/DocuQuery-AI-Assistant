@@ -1,3 +1,15 @@
+---
+title: DocuQuery AI Assistant
+emoji: 📄
+colorFrom: blue
+colorTo: indigo
+sdk: gradio
+sdk_version: "4.44.1"
+python_version: "3.11"
+app_file: app.py
+pinned: false
+---
+
 # DocuQuery AI Assistant
 
 Gradio-based RAG application for querying PDF documents with hybrid retrieval, Gemini generation, and optional Pinecone cloud search.
