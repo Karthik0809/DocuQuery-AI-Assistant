@@ -79,7 +79,22 @@ def launch():
         return (cleared_status, cleared_chat, cleared_stats, gr.update(value=None), gr.update(value=""),
                 gr.update(value=""), gr.update(value="en"),
                 gr.update(value="*API key not set*"),
-                gr.update(value="*Using local storage*"))
+                gr.update(value="*Using local storage*"),
+                "",
+                gr.update(value="", visible=False),
+                gr.update(visible=False),
+                gr.update(visible=False))
+
+    def split_answer_and_debug(answer_text):
+        marker = "\n\n---\n**Method Used:**"
+        if not answer_text:
+            return "", ""
+        idx = answer_text.find(marker)
+        if idx == -1:
+            return answer_text, ""
+        clean_answer = answer_text[:idx].strip()
+        details = answer_text[idx:].strip()
+        return clean_answer, details
 
     with gr.Blocks(title="DocuQuery AI - Document Q&A Assistant", theme=gr.themes.Soft()) as demo:
         # Header with title
@@ -192,6 +207,10 @@ def launch():
                     )
                     ask_btn = gr.Button("Ask ➤", variant="primary", scale=1, size="lg")
                     explain_more_btn = gr.Button("💡 Explain More", variant="secondary", scale=1, size="lg", visible=False)
+                    show_details_btn = gr.Button("Show Details", variant="secondary", scale=1, size="lg", visible=False)
+                    hide_details_btn = gr.Button("Hide Details", variant="secondary", scale=1, size="lg", visible=False)
+                details_text = gr.Markdown(visible=False)
+                last_details_state = gr.State(value="")
                 
                 # Follow-up Suggestions
                 followup_suggestions = gr.Row(visible=False)
@@ -280,7 +299,8 @@ def launch():
             conf = DEFAULT_CONFIDENCE_THRESHOLD
             exp = DEFAULT_USE_EXPANSION
             rerank = DEFAULT_ENABLE_RERANKING
-            debug = DEFAULT_SHOW_DEBUG
+            # Always generate debug internally, but hide it from chat unless user clicks.
+            debug = True
             max_tokens = 0
             if target_lang != "en":
                 # Use bilingual answer method
@@ -289,6 +309,12 @@ def launch():
                 # Use regular answer method for all documents
                 empty, new_history = rag.answer(question, history, k, conf, exp, max_tokens, rerank, debug)
             
+            details_payload = ""
+            if len(new_history) > len(history):
+                last_q, last_a = new_history[-1]
+                clean_answer, details_payload = split_answer_and_debug(last_a)
+                new_history[-1] = (last_q, clean_answer)
+
             # Show "Explain More" button and follow-up suggestions if answer was generated
             show_explain = len(new_history) > len(history) and len(new_history[-1][1]) > 50
             suggestions = []
@@ -307,47 +333,120 @@ def launch():
                 followup_updates.append(gr.update(visible=False))
                 followup_state_list.append("")
             
-            return empty, new_history, gr.update(visible=show_explain), gr.update(visible=len(suggestions) > 0), followup_state_list, *followup_updates
+            return (
+                empty,
+                new_history,
+                gr.update(visible=show_explain),
+                gr.update(visible=bool(details_payload)),
+                gr.update(visible=False),
+                details_payload,
+                gr.update(value="", visible=False),
+                gr.update(visible=len(suggestions) > 0),
+                followup_state_list,
+                *followup_updates,
+            )
         
         ask_btn.click(fn=handle_query,
                       inputs=[question_input, chat, target_language],
-                      outputs=[question_input, chat, explain_more_btn, followup_suggestions, followup_suggestion_state, followup1, followup2, followup3, followup4], show_progress="full")
+                      outputs=[question_input, chat, explain_more_btn, show_details_btn, hide_details_btn, last_details_state, details_text, followup_suggestions, followup_suggestion_state, followup1, followup2, followup3, followup4], show_progress="full")
         question_input.submit(fn=handle_query,
                               inputs=[question_input, chat, target_language],
-                              outputs=[question_input, chat, explain_more_btn, followup_suggestions, followup_suggestion_state, followup1, followup2, followup3, followup4], show_progress="full")
+                              outputs=[question_input, chat, explain_more_btn, show_details_btn, hide_details_btn, last_details_state, details_text, followup_suggestions, followup_suggestion_state, followup1, followup2, followup3, followup4], show_progress="full")
         
         # Answer refinement
         def handle_explain_more(history):
             if not history or len(history) == 0:
-                return "", history
+                return "", history, gr.update(visible=False), gr.update(visible=False), "", gr.update(value="", visible=False)
             last_q, last_a = history[-1]
             refined_q = f"Provide more detailed information about: {last_q}"
-            return rag.refine_answer(refined_q, history)
+            empty, new_history = rag.refine_answer(refined_q, history)
+            details_payload = ""
+            if len(new_history) > len(history):
+                nq, na = new_history[-1]
+                clean_answer, details_payload = split_answer_and_debug(na)
+                new_history[-1] = (nq, clean_answer)
+            return (
+                empty,
+                new_history,
+                gr.update(visible=bool(details_payload)),
+                gr.update(visible=False),
+                details_payload,
+                gr.update(value="", visible=False),
+            )
         
-        explain_more_btn.click(fn=handle_explain_more, inputs=[chat], outputs=[question_input, chat], show_progress="full")
+        explain_more_btn.click(
+            fn=handle_explain_more,
+            inputs=[chat],
+            outputs=[question_input, chat, show_details_btn, hide_details_btn, last_details_state, details_text],
+            show_progress="full"
+        )
+
+        def show_details(details):
+            if not details:
+                return gr.update(value="No details available.", visible=True), gr.update(visible=False), gr.update(visible=True)
+            return gr.update(value=details, visible=True), gr.update(visible=False), gr.update(visible=True)
+
+        def hide_details():
+            return gr.update(value="", visible=False), gr.update(visible=True), gr.update(visible=False)
+
+        show_details_btn.click(
+            fn=show_details,
+            inputs=[last_details_state],
+            outputs=[details_text, show_details_btn, hide_details_btn],
+            show_progress="hidden"
+        )
+        hide_details_btn.click(
+            fn=hide_details,
+            outputs=[details_text, show_details_btn, hide_details_btn],
+            show_progress="hidden"
+        )
         
         # Follow-up suggestions - use state to get suggestion text
         def use_followup1(history, state):
             if state and len(state) > 0 and state[0]:
-                return rag.answer(state[0], history, k=8, confidence_threshold=0.2)
-            return "", history
+                empty, new_history = rag.answer(state[0], history, k=8, confidence_threshold=0.2, show_debug=True)
+                details_payload = ""
+                if len(new_history) > len(history):
+                    q, a = new_history[-1]
+                    clean_answer, details_payload = split_answer_and_debug(a)
+                    new_history[-1] = (q, clean_answer)
+                return empty, new_history, gr.update(visible=bool(details_payload)), gr.update(visible=False), details_payload, gr.update(value="", visible=False)
+            return "", history, gr.update(visible=False), gr.update(visible=False), "", gr.update(value="", visible=False)
         def use_followup2(history, state):
             if state and len(state) > 1 and state[1]:
-                return rag.answer(state[1], history, k=8, confidence_threshold=0.2)
-            return "", history
+                empty, new_history = rag.answer(state[1], history, k=8, confidence_threshold=0.2, show_debug=True)
+                details_payload = ""
+                if len(new_history) > len(history):
+                    q, a = new_history[-1]
+                    clean_answer, details_payload = split_answer_and_debug(a)
+                    new_history[-1] = (q, clean_answer)
+                return empty, new_history, gr.update(visible=bool(details_payload)), gr.update(visible=False), details_payload, gr.update(value="", visible=False)
+            return "", history, gr.update(visible=False), gr.update(visible=False), "", gr.update(value="", visible=False)
         def use_followup3(history, state):
             if state and len(state) > 2 and state[2]:
-                return rag.answer(state[2], history, k=8, confidence_threshold=0.2)
-            return "", history
+                empty, new_history = rag.answer(state[2], history, k=8, confidence_threshold=0.2, show_debug=True)
+                details_payload = ""
+                if len(new_history) > len(history):
+                    q, a = new_history[-1]
+                    clean_answer, details_payload = split_answer_and_debug(a)
+                    new_history[-1] = (q, clean_answer)
+                return empty, new_history, gr.update(visible=bool(details_payload)), gr.update(visible=False), details_payload, gr.update(value="", visible=False)
+            return "", history, gr.update(visible=False), gr.update(visible=False), "", gr.update(value="", visible=False)
         def use_followup4(history, state):
             if state and len(state) > 3 and state[3]:
-                return rag.answer(state[3], history, k=8, confidence_threshold=0.2)
-            return "", history
+                empty, new_history = rag.answer(state[3], history, k=8, confidence_threshold=0.2, show_debug=True)
+                details_payload = ""
+                if len(new_history) > len(history):
+                    q, a = new_history[-1]
+                    clean_answer, details_payload = split_answer_and_debug(a)
+                    new_history[-1] = (q, clean_answer)
+                return empty, new_history, gr.update(visible=bool(details_payload)), gr.update(visible=False), details_payload, gr.update(value="", visible=False)
+            return "", history, gr.update(visible=False), gr.update(visible=False), "", gr.update(value="", visible=False)
         
-        followup1.click(fn=use_followup1, inputs=[chat, followup_suggestion_state], outputs=[question_input, chat], show_progress="full")
-        followup2.click(fn=use_followup2, inputs=[chat, followup_suggestion_state], outputs=[question_input, chat], show_progress="full")
-        followup3.click(fn=use_followup3, inputs=[chat, followup_suggestion_state], outputs=[question_input, chat], show_progress="full")
-        followup4.click(fn=use_followup4, inputs=[chat, followup_suggestion_state], outputs=[question_input, chat], show_progress="full")
+        followup1.click(fn=use_followup1, inputs=[chat, followup_suggestion_state], outputs=[question_input, chat, show_details_btn, hide_details_btn, last_details_state, details_text], show_progress="full")
+        followup2.click(fn=use_followup2, inputs=[chat, followup_suggestion_state], outputs=[question_input, chat, show_details_btn, hide_details_btn, last_details_state, details_text], show_progress="full")
+        followup3.click(fn=use_followup3, inputs=[chat, followup_suggestion_state], outputs=[question_input, chat, show_details_btn, hide_details_btn, last_details_state, details_text], show_progress="full")
+        followup4.click(fn=use_followup4, inputs=[chat, followup_suggestion_state], outputs=[question_input, chat, show_details_btn, hide_details_btn, last_details_state, details_text], show_progress="full")
         
         # Document preview
         process_btn.click(fn=update_preview_selector, outputs=[doc_preview_select], show_progress="hidden").then(
@@ -376,7 +475,8 @@ def launch():
         )
 
         clear_btn.click(fn=ui_clear, outputs=[status, chat, stats_box, files, question_input,
-                                              api_key, target_language, gemini_status, pinecone_status],
+                                              api_key, target_language, gemini_status, pinecone_status,
+                                              last_details_state, details_text, show_details_btn, hide_details_btn],
                         show_progress="hidden").then(
             fn=lambda: gr.update(visible=False), outputs=[stats_box]
         )
