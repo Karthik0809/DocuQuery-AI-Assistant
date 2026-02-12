@@ -88,10 +88,15 @@ def launch():
     def split_answer_and_debug(answer_text):
         if not answer_text:
             return "", ""
-        # Match multiple debug header variants:
-        # - --- + Method Used
-        # - --- + **Method Used:**
-        # - plain Method Used
+        # Primary split: debug block is always appended after a markdown divider.
+        divider = re.search(r"\n\s*---\s*\n", answer_text)
+        if divider:
+            idx = divider.start()
+            clean_answer = answer_text[:idx].strip()
+            details = answer_text[idx:].strip()
+            return clean_answer, details
+
+        # Fallback for historical formats where divider is missing.
         m = re.search(
             r"(\n\s*---\s*\n\s*(?:\*\*)?Method Used:?(?:\*\*)?|\n\s*(?:\*\*)?Method Used:?(?:\*\*))",
             answer_text,
