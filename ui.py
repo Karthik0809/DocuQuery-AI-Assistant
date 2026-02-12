@@ -71,6 +71,8 @@ def launch():
     _apply_gradio_api_info_hotfix()
     _apply_gradio_schema_hotfix()
     rag = EnhancedRAGChatbot()
+    language_name_to_code = {name: code for code, name in SUPPORTED_LANGUAGES.items()}
+    language_choices = list(language_name_to_code.keys())
     
     # Initial status from pre-defined keys
     initial_gemini_status = f"**Gemini Ready!**\nModel: {rag.gen.model_name}\nStatus: Pre-configured" if rag.gen.api_key_set else "*API key not set*"
@@ -79,7 +81,7 @@ def launch():
     def ui_clear():
         cleared_status, cleared_chat, cleared_stats = rag.clear()
         return (cleared_status, cleared_chat, cleared_stats, gr.update(value=None), gr.update(value=""),
-                gr.update(value=""), gr.update(value="en"),
+                gr.update(value=""), gr.update(value="English"),
                 gr.update(value="*API key not set*"),
                 gr.update(value="*Using local storage*"))
 
@@ -308,8 +310,8 @@ def launch():
                 # Optional Controls (collapsed by default)
                 with gr.Accordion("🌐 Language & Options", open=False):
                     target_language = gr.Dropdown(
-                        choices=[(name, code) for code, name in SUPPORTED_LANGUAGES.items()],
-                        value="en",
+                        choices=language_choices,
+                        value="English",
                         label="Answer Language",
                     )
 
@@ -353,7 +355,7 @@ def launch():
                 return rag.get_document_segmentation(doc_name if doc_name != "all" else None)
         
         # Handle queries with document and language support
-        def handle_query(question, history, target_lang):
+        def handle_query(question, history, target_lang_name):
             # Advanced settings removed from UI; keep tuned defaults in config.
             k = DEFAULT_TOP_K
             conf = DEFAULT_CONFIDENCE_THRESHOLD
@@ -362,6 +364,7 @@ def launch():
             # Always generate debug internally, but hide it from chat unless user clicks.
             debug = True
             max_tokens = 0
+            target_lang = language_name_to_code.get((target_lang_name or "").strip(), "en")
             if target_lang != "en":
                 # Use bilingual answer method
                 empty, new_history = rag.answer_with_translation(question, history, target_lang, k, conf, exp, rerank, max_tokens, debug)
