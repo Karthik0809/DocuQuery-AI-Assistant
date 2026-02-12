@@ -105,12 +105,15 @@ def launch():
         if not details_text:
             return answer_text
         details_clean = re.sub(r"^\s*---\s*", "", details_text.strip(), flags=re.S)
-        # Per-reply info toggle using native HTML details tag.
+        # Per-reply info toggle shown at right side of each assistant response.
         return (
             f"{answer_text}\n\n"
-            f"<details><summary><b>i</b></summary>\n\n"
-            f"{details_clean}\n\n"
+            f"<div class='msg-info-holder'>"
+            f"<details class='msg-info-details'>"
+            f"<summary class='msg-info-btn'><b><i>i</i></b></summary>"
+            f"<div class='msg-info-content'>{details_clean}</div>"
             f"</details>"
+            f"</div>"
         )
 
     custom_css = """
@@ -118,6 +121,44 @@ def launch():
     .gradio-container button[title="Share"],
     .gradio-container [aria-label="Share"] {
         display: none !important;
+    }
+    .msg-info-holder {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 4px;
+    }
+    .msg-info-details {
+        position: relative;
+    }
+    .msg-info-btn {
+        list-style: none;
+        cursor: pointer;
+        width: 22px;
+        height: 22px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.45);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255,255,255,0.08);
+        color: #fff;
+        font-size: 14px;
+        line-height: 1;
+        user-select: none;
+    }
+    .msg-info-btn::marker,
+    .msg-info-btn::-webkit-details-marker {
+        display: none;
+        content: "";
+    }
+    .msg-info-content {
+        margin-top: 8px;
+        padding: 10px;
+        border: 1px solid rgba(255,255,255,0.2);
+        border-radius: 10px;
+        background: rgba(0,0,0,0.18);
+        white-space: pre-wrap;
+        font-size: 0.9rem;
     }
     """
     with gr.Blocks(title="DocuQuery AI - Document Q&A Assistant", theme=gr.themes.Soft(), css=custom_css) as demo:
@@ -217,7 +258,7 @@ def launch():
                     label="Chat", 
                     height=650, 
                     show_label=False,
-                    avatar_images=("assets/user_avatar.svg", "assets/bot_avatar.svg"),
+                    avatar_images=("https://i.pravatar.cc/100?img=68", "https://robohash.org/docuquery-bot.png?size=100x100&set=set3"),
                     show_share_button=False,
                     sanitize_html=False
                 )
