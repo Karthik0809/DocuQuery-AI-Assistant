@@ -351,7 +351,7 @@ def launch():
     port = int(os.environ.get("PORT", os.environ.get("GRADIO_SERVER_PORT", GRADIO_SERVER_PORT)))
     server_name = os.environ.get("GRADIO_SERVER_NAME", "0.0.0.0")
     share = os.environ.get("GRADIO_SHARE", "false").lower() in ("1", "true", "yes")
-    print(f"Opening in browser with PWA support (port {port})...")
+    print(f"Opening in browser (port {port})...")
     # Try to launch on specified port, but allow Gradio to find an available port if needed
     import socket
     def is_port_available(port):
@@ -365,7 +365,6 @@ def launch():
             debug=True,
             show_error=True,
             quiet=False,
-            pwa=True,
             share=share,
             server_name=server_name
         )
@@ -374,7 +373,6 @@ def launch():
             debug=True,
             show_error=True,
             quiet=False,
-            pwa=True,
             server_port=port,
             share=share,
             server_name=server_name
