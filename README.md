@@ -18,7 +18,7 @@ This project is domain-agnostic (works across general document types), with a si
 
 ## Live Demo
 
-- Hugging Face Space: `https://huggingface.co/spaces/karthikmulugu08/docuquery-ai-assistant`
+- Hugging Face Space: [https://huggingface.co/spaces/karthikmulugu08/docuquery-ai-assistant](https://huggingface.co/spaces/karthikmulugu08/docuquery-ai-assistant)
 
 ## What It Does
 
@@ -122,7 +122,7 @@ Recommended free hosting target: **Hugging Face Spaces (Gradio SDK)**.
 
 Live Space URL:
 
-- `https://huggingface.co/spaces/karthikmulugu08/docuquery-ai-assistant`
+- [https://huggingface.co/spaces/karthikmulugu08/docuquery-ai-assistant](https://huggingface.co/spaces/karthikmulugu08/docuquery-ai-assistant)
 
 ### Deploy Steps
 
