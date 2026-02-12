@@ -133,8 +133,8 @@ def launch():
     .msg-info-btn {
         list-style: none;
         cursor: pointer;
-        width: 22px;
-        height: 22px;
+        width: 30px;
+        height: 30px;
         border-radius: 999px;
         border: 1px solid rgba(255,255,255,0.45);
         display: inline-flex;
@@ -142,7 +142,7 @@ def launch():
         justify-content: center;
         background: rgba(255,255,255,0.08);
         color: #fff;
-        font-size: 14px;
+        font-size: 18px;
         line-height: 1;
         user-select: none;
     }
@@ -159,6 +159,12 @@ def launch():
         background: rgba(0,0,0,0.18);
         white-space: pre-wrap;
         font-size: 0.9rem;
+    }
+    /* Make chat avatars easier to see */
+    .gradio-container .avatar-container img,
+    .gradio-container img.avatar-image {
+        width: 42px !important;
+        height: 42px !important;
     }
     """
     with gr.Blocks(title="DocuQuery AI - Document Q&A Assistant", theme=gr.themes.Soft(), css=custom_css) as demo:
@@ -274,15 +280,6 @@ def launch():
                     )
                     ask_btn = gr.Button("Ask ➤", variant="primary", scale=1, size="lg")
                 
-                # Follow-up Suggestions
-                followup_suggestions = gr.Row(visible=False)
-                followup_suggestion_state = gr.State(value=["", "", "", ""])  # Store suggestion texts
-                with followup_suggestions:
-                    followup1 = gr.Button("", size="sm", visible=False, scale=1)
-                    followup2 = gr.Button("", size="sm", visible=False, scale=1)
-                    followup3 = gr.Button("", size="sm", visible=False, scale=1)
-                    followup4 = gr.Button("", size="sm", visible=False, scale=1)
-                
                 # Document Comparison
                 with gr.Accordion("🔀 Compare Documents", open=False):
                     compare_doc1 = gr.Dropdown(
@@ -381,87 +378,17 @@ def launch():
                 q, a = new_history[-1]
                 new_history[-1] = (q, attach_inline_details(a, details_payload))
 
-            # Keep follow-up suggestions behavior
-            suggestions = []
-            if len(new_history) > len(history) and len(new_history[-1][1]) > 50:
-                # Get follow-up suggestions
-                hits, _ = rag.vs.search(question, top_k=5)
-                suggestions = rag.get_followup_suggestions(question, hits)
-            
-            # Update follow-up buttons and state
-            followup_updates = []
-            followup_state_list = []
-            for i, sug in enumerate(suggestions[:4]):
-                followup_updates.append(gr.update(value=sug, visible=True))
-                followup_state_list.append(sug)
-            while len(followup_updates) < 4:
-                followup_updates.append(gr.update(visible=False))
-                followup_state_list.append("")
-            
             return (
                 empty,
                 new_history,
-                gr.update(visible=len(suggestions) > 0),
-                followup_state_list,
-                *followup_updates,
             )
         
         ask_btn.click(fn=handle_query,
                       inputs=[question_input, chat, target_language],
-                      outputs=[question_input, chat, followup_suggestions, followup_suggestion_state, followup1, followup2, followup3, followup4], show_progress="full")
+                      outputs=[question_input, chat], show_progress="full")
         question_input.submit(fn=handle_query,
                               inputs=[question_input, chat, target_language],
-                              outputs=[question_input, chat, followup_suggestions, followup_suggestion_state, followup1, followup2, followup3, followup4], show_progress="full")
-        
-        # Follow-up suggestions - use state to get suggestion text
-        def use_followup1(history, state):
-            if state and len(state) > 0 and state[0]:
-                empty, new_history = rag.answer(state[0], history, k=8, confidence_threshold=0.2, show_debug=True)
-                details_payload = ""
-                if len(new_history) > len(history):
-                    q, a = new_history[-1]
-                    clean_answer, details_payload = split_answer_and_debug(a)
-                    new_history[-1] = (q, attach_inline_details(clean_answer, details_payload))
-                return "", new_history
-            return "", history
-
-        def use_followup2(history, state):
-            if state and len(state) > 1 and state[1]:
-                empty, new_history = rag.answer(state[1], history, k=8, confidence_threshold=0.2, show_debug=True)
-                details_payload = ""
-                if len(new_history) > len(history):
-                    q, a = new_history[-1]
-                    clean_answer, details_payload = split_answer_and_debug(a)
-                    new_history[-1] = (q, attach_inline_details(clean_answer, details_payload))
-                return "", new_history
-            return "", history
-
-        def use_followup3(history, state):
-            if state and len(state) > 2 and state[2]:
-                empty, new_history = rag.answer(state[2], history, k=8, confidence_threshold=0.2, show_debug=True)
-                details_payload = ""
-                if len(new_history) > len(history):
-                    q, a = new_history[-1]
-                    clean_answer, details_payload = split_answer_and_debug(a)
-                    new_history[-1] = (q, attach_inline_details(clean_answer, details_payload))
-                return "", new_history
-            return "", history
-
-        def use_followup4(history, state):
-            if state and len(state) > 3 and state[3]:
-                empty, new_history = rag.answer(state[3], history, k=8, confidence_threshold=0.2, show_debug=True)
-                details_payload = ""
-                if len(new_history) > len(history):
-                    q, a = new_history[-1]
-                    clean_answer, details_payload = split_answer_and_debug(a)
-                    new_history[-1] = (q, attach_inline_details(clean_answer, details_payload))
-                return "", new_history
-            return "", history
-        
-        followup1.click(fn=use_followup1, inputs=[chat, followup_suggestion_state], outputs=[question_input, chat], show_progress="full")
-        followup2.click(fn=use_followup2, inputs=[chat, followup_suggestion_state], outputs=[question_input, chat], show_progress="full")
-        followup3.click(fn=use_followup3, inputs=[chat, followup_suggestion_state], outputs=[question_input, chat], show_progress="full")
-        followup4.click(fn=use_followup4, inputs=[chat, followup_suggestion_state], outputs=[question_input, chat], show_progress="full")
+                              outputs=[question_input, chat], show_progress="full")
         
         # Document preview
         process_btn.click(fn=update_preview_selector, outputs=[doc_preview_select], show_progress="hidden").then(
