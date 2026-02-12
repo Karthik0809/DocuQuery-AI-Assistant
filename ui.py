@@ -37,8 +37,37 @@ def _apply_gradio_api_info_hotfix():
     Blocks.get_api_info = _safe_get_api_info
     Blocks._docuquery_api_info_patched = True
 
+def _apply_gradio_schema_hotfix():
+    """
+    Guard gradio_client schema conversion against malformed schema nodes such
+    as `additionalProperties: true` that can raise TypeError in some versions.
+    """
+    try:
+        import gradio_client.utils as gc_utils
+    except Exception:
+        return
+
+    if getattr(gc_utils, "_docuquery_schema_patched", False):
+        return
+
+    original_json_schema_to_python_type = gc_utils.json_schema_to_python_type
+
+    def _safe_json_schema_to_python_type(schema):
+        try:
+            return original_json_schema_to_python_type(schema)
+        except TypeError as e:
+            if "bool" in str(e):
+                return "Any"
+            raise
+        except Exception:
+            return "Any"
+
+    gc_utils.json_schema_to_python_type = _safe_json_schema_to_python_type
+    gc_utils._docuquery_schema_patched = True
+
 def launch():
     _apply_gradio_api_info_hotfix()
+    _apply_gradio_schema_hotfix()
     rag = EnhancedRAGChatbot()
     
     # Initial status from pre-defined keys
