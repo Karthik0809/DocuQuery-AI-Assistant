@@ -2,6 +2,7 @@
 import gradio as gr
 from main import EnhancedRAGChatbot
 import os
+import re
 from config import (
     DEFAULT_GEMINI_MODEL,
     DEFAULT_TOP_K,
@@ -86,12 +87,20 @@ def launch():
                 gr.update(visible=False))
 
     def split_answer_and_debug(answer_text):
-        marker = "\n\n---\n**Method Used:**"
         if not answer_text:
             return "", ""
-        idx = answer_text.find(marker)
-        if idx == -1:
+        # Match multiple debug header variants:
+        # - --- + Method Used
+        # - --- + **Method Used:**
+        # - plain Method Used
+        m = re.search(
+            r"(\n\s*---\s*\n\s*(?:\*\*)?Method Used:?(?:\*\*)?|\n\s*(?:\*\*)?Method Used:?(?:\*\*))",
+            answer_text,
+            flags=re.IGNORECASE,
+        )
+        if not m:
             return answer_text, ""
+        idx = m.start()
         clean_answer = answer_text[:idx].strip()
         details = answer_text[idx:].strip()
         return clean_answer, details
