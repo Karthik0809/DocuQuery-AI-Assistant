@@ -113,7 +113,14 @@ def launch():
             f"</details>"
         )
 
-    with gr.Blocks(title="DocuQuery AI - Document Q&A Assistant", theme=gr.themes.Soft()) as demo:
+    custom_css = """
+    .gradio-container .share-btn,
+    .gradio-container button[title="Share"],
+    .gradio-container [aria-label="Share"] {
+        display: none !important;
+    }
+    """
+    with gr.Blocks(title="DocuQuery AI - Document Q&A Assistant", theme=gr.themes.Soft(), css=custom_css) as demo:
         # Header with title
         gr.HTML("<div style='text-align: center; padding: 20px;'><h1>📄 DocuQuery AI Assistant</h1><p style='font-size: 16px; color: #666;'>Ask questions about your PDF documents and get instant answers</p></div>")
 
@@ -210,8 +217,9 @@ def launch():
                     label="Chat", 
                     height=650, 
                     show_label=False,
-                    avatar_images=(None, "🤖"),
-                    show_share_button=False
+                    avatar_images=("assets/user_avatar.svg", "assets/bot_avatar.svg"),
+                    show_share_button=False,
+                    sanitize_html=False
                 )
                 
                 # Question Input Section
