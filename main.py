@@ -19,26 +19,29 @@ from config import DEFAULT_GEMINI_MODEL, DEFAULT_GEMINI_API_KEY, DEFAULT_PINECON
 from config import USE_OPENAI_EMBEDDINGS, OPENAI_API_KEY
 from utils import PerformanceMetrics, ResponseDebugInfo, ErrorRecovery, safe_sent_tokenize
 from document_processor import EnhancedDocumentProcessor
-from rag_engine import HierarchicalChunker, AdvancedVectorStore, EnhancedQAModel, OpenAIEmbedder
+from rag_engine import HierarchicalChunker, AdvancedVectorStore, EnhancedQAModel, OpenAIEmbedder, HashingEmbedder
 from llm_interface import GeminiGenerator, SpeechProcessor, BilingualProcessor
 from export_manager import ExportManager
 from langgraph_orchestrator import LangGraphRAGOrchestrator
 
 class EnhancedRAGChatbot:
+    def _init_embedding_model(self, device: str):
+        if USE_OPENAI_EMBEDDINGS:
+            if OPENAI_API_KEY and (OPENAI_API_KEY or "").strip():
+                return OpenAIEmbedder(api_key=OPENAI_API_KEY), "openai/text-embedding-3-large"
+            print("WARNING: USE_OPENAI_EMBEDDINGS=True but OPENAI_API_KEY is not set.")
+        try:
+            emb = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", device=device)
+            return emb, "sentence-transformers/all-MiniLM-L6-v2"
+        except Exception as e:
+            print(f"Embedding model download failed; using local hashing fallback: {e}")
+            return HashingEmbedder(dim=384), "local-hashing-embedder"
+
     def __init__(self):
         device = "cuda" if torch.cuda.is_available() else "cpu"
         print(f"Initializing on {device.upper()}")
-        if USE_OPENAI_EMBEDDINGS:
-            if OPENAI_API_KEY and (OPENAI_API_KEY or "").strip():
-                self.embed = OpenAIEmbedder(api_key=OPENAI_API_KEY)
-                print("Using OpenAI text-embedding-3-large (1024 dims) for Pinecone index 'quickstart'.")
-            else:
-                print("WARNING: USE_OPENAI_EMBEDDINGS=True but OPENAI_API_KEY is not set in config.py.")
-                print("Set OPENAI_API_KEY to use your 1024-dim 'quickstart' index, or Pinecone will use local FAISS only.")
-                self.embed = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", device=device)
-        else:
-            # Faster default embedding model for quicker document processing.
-            self.embed = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", device=device)
+        self.embed, self.embedding_model_name = self._init_embedding_model(device)
+        print(f"Embedding backend: {self.embedding_model_name}")
         self.doc = EnhancedDocumentProcessor()
         self.chunker = HierarchicalChunker(self.embed)
         # Vector store: FAISS + optional Pinecone when API key is set
@@ -77,7 +80,7 @@ class EnhancedRAGChatbot:
     def _set_components_table(self):
         """Set up components table for tracking document components"""
         self.components_table = {
-            "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+            "embedding_model": getattr(self, "embedding_model_name", "unknown"),
             "chunker": "HierarchicalChunker",
             "vector_store": "AdvancedVectorStore",
             "qa_model": "EnhancedQAModel",

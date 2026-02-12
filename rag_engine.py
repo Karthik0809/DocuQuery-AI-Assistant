@@ -60,6 +60,37 @@ class OpenAIEmbedder:
         return arr
 
 
+class HashingEmbedder:
+    """Deterministic local embedder that requires no external downloads."""
+    def __init__(self, dim=384):
+        self._dim = int(dim)
+
+    def get_sentence_embedding_dimension(self):
+        return self._dim
+
+    def encode(self, texts, normalize_embeddings=True, show_progress_bar=False, batch_size=32, **kwargs):
+        if isinstance(texts, str):
+            texts = [texts]
+        out = []
+        for txt in texts:
+            vec = np.zeros(self._dim, dtype="float32")
+            tokens = re.findall(r"[a-z0-9]+", (txt or "").lower())
+            if not tokens:
+                out.append(vec)
+                continue
+            for tok in tokens:
+                h = hashlib.md5(tok.encode("utf-8")).hexdigest()
+                idx = int(h[:8], 16) % self._dim
+                sign = -1.0 if (int(h[8:10], 16) % 2) else 1.0
+                vec[idx] += sign
+            if normalize_embeddings:
+                n = np.linalg.norm(vec)
+                if n > 0:
+                    vec = vec / n
+            out.append(vec)
+        return np.array(out, dtype="float32")
+
+
 class HierarchicalChunker:
     def __init__(self, embed_model, target_tokens=TARGET_TOKENS, overlap_sentences=OVERLAP_SENTENCES, boundary_drop=BOUNDARY_DROP, tok_chars_ratio=TOK_CHARS_RATIO):
         self.emb = embed_model
@@ -395,10 +426,16 @@ class AdvancedVectorStore:
 class EnhancedQAModel:
     def __init__(self):
         m = "deepset/roberta-base-squad2"
-        self.pipe = pipeline("question-answering", model=m, tokenizer=m, device=0 if torch.cuda.is_available() else -1)
+        self.pipe = None
+        try:
+            self.pipe = pipeline("question-answering", model=m, tokenizer=m, device=0 if torch.cuda.is_available() else -1)
+        except Exception as e:
+            print(f"Extractive QA model unavailable (startup will continue): {e}")
 
     def answer(self, question, hits):
         start = time.time()
+        if self.pipe is None:
+            return {"found": False, "confidence": 0.0, "processing_time": time.time() - start}
         if not hits:
             return {"found": False, "confidence": 0.0, "processing_time": 0.0}
         best = None
