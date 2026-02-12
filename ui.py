@@ -351,6 +351,11 @@ def launch():
     port = int(os.environ.get("PORT", os.environ.get("GRADIO_SERVER_PORT", GRADIO_SERVER_PORT)))
     server_name = os.environ.get("GRADIO_SERVER_NAME", "0.0.0.0")
     share = os.environ.get("GRADIO_SHARE", "false").lower() in ("1", "true", "yes")
+    is_hf_space = bool(os.environ.get("SPACE_ID") or os.environ.get("HF_SPACE_ID"))
+    if is_hf_space:
+        # Spaces requires external access; share=False can fail startup.
+        share = True
+        print("Detected Hugging Face Spaces runtime; forcing share=True.")
     print(f"Opening in browser (port {port})...")
     # Try to launch on specified port, but allow Gradio to find an available port if needed
     import socket
@@ -358,21 +363,34 @@ def launch():
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             return s.connect_ex(('localhost', port)) != 0
     
+    def _launch_with_compat(**kwargs):
+        try:
+            demo.launch(**kwargs)
+        except TypeError as e:
+            # Older Gradio builds may not support show_api.
+            if "show_api" in str(e):
+                kwargs.pop("show_api", None)
+                demo.launch(**kwargs)
+            else:
+                raise
+
     # If port is not available, let Gradio find one automatically
     if not is_port_available(port):
         print(f"Port {port} is in use, Gradio will find an available port automatically...")
-        demo.launch(
+        _launch_with_compat(
             debug=True,
             show_error=True,
             quiet=False,
+            show_api=False,
             share=share,
             server_name=server_name
         )
     else:
-        demo.launch(
+        _launch_with_compat(
             debug=True,
             show_error=True,
             quiet=False,
+            show_api=False,
             server_port=port,
             share=share,
             server_name=server_name
