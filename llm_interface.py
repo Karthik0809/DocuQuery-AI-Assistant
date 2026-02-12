@@ -270,11 +270,36 @@ class SpeechProcessor:
     def __init__(self):
         if not SPEECH_AVAILABLE:
             self.available = False
+            self.stt_available = False
+            self.tts_available = False
+            self.recognizer = None
+            self.tts_engine = None
             return
-        
-        self.available = True
-        self.recognizer = sr.Recognizer()
-        self.tts_engine = pyttsx3.init()
+
+        self.recognizer = None
+        self.tts_engine = None
+        self.stt_available = False
+        self.tts_available = False
+
+        # STT can be available even if TTS is unavailable in cloud containers.
+        try:
+            self.recognizer = sr.Recognizer()
+            self.stt_available = True
+        except Exception as e:
+            print(f"Speech recognition initialization failed: {e}")
+
+        # pyttsx3 may fail on Linux containers when eSpeak is missing.
+        try:
+            self.tts_engine = pyttsx3.init()
+            self.tts_available = True
+        except Exception as e:
+            self.tts_engine = None
+            self.tts_available = False
+            print(f"Text-to-speech disabled: {e}")
+
+        self.available = self.stt_available or self.tts_available
+        if not self.tts_available:
+            return
         
         # Configure TTS engine
         voices = self.tts_engine.getProperty('voices')
@@ -291,7 +316,7 @@ class SpeechProcessor:
     
     def speech_to_text(self, audio_data=None):
         """Convert speech to text using microphone or audio file"""
-        if not self.available:
+        if not self.stt_available or self.recognizer is None:
             return "Speech recognition not available. Please install required packages."
         
         try:
@@ -320,8 +345,8 @@ class SpeechProcessor:
     
     def text_to_speech(self, text, language='en'):
         """Convert text to speech and play it"""
-        if not self.available:
-            return "Text-to-speech not available. Please install required packages."
+        if not self.tts_available or self.tts_engine is None:
+            return "Text-to-speech not available in this environment."
         
         try:
             # Set language-specific voice if available
