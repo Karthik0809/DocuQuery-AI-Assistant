@@ -1,0 +1,373 @@
+%% DocuQuery AI Assistant --- IEEEtran manuscript.
+%% Retrieval metrics below are HARDCODED from the last run of paper/micro_benchmark.py; sync with benchmark_results.tex.
+%% After re-running the script, update the ``BENCHMARK SNAPSHOT'' block and matching abstract/tables.
+%% Self-contained: bibliography is below (no BibTeX). Compile: pdflatex docuquery_ieee (run twice for stable refs/cross-refs).
+%% Optional: paper/references.bib is a copy for reference if you use BibTeX later.
+\documentclass[journal]{IEEEtran}
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, fit}
+
+%% --- BENCHMARK SNAPSHOT (sync with paper/benchmark_results.tex after micro_benchmark.py) ---
+\newcommand{\SnapDate}{2026-04-04}
+\newcommand{\SnapEmbed}{all-MiniLM-L6-v2}
+\newcommand{\SnapChunks}{120}
+\newcommand{\SnapQueries}{30}
+\newcommand{\SnapBuildSec}{2.346}
+\newcommand{\SnapRBB}{1.00}
+\newcommand{\SnapRDB}{0.83}
+\newcommand{\SnapRTFB}{0.97}
+\newcommand{\SnapRHB}{1.00}
+\newcommand{\SnapRB}{1.00}
+\newcommand{\SnapRD}{0.03}
+\newcommand{\SnapRTF}{1.00}
+\newcommand{\SnapRH}{0.13}
+% MRR for BM25: macro names must not embed ``25'' (LaTeX parses \SnapMrrBM25B as \SnapMrrBM2 + ``5B'').
+\newcommand{\SnapMrrBMxxB}{0.783}
+\newcommand{\SnapMrrDenseB}{0.697}
+\newcommand{\SnapMrrTFIDFB}{0.922}
+\newcommand{\SnapMrrHybridB}{1.000}
+\newcommand{\SnapMrrBMxxA}{1.000}
+\newcommand{\SnapMrrDenseA}{0.026}
+\newcommand{\SnapMrrTFIDFA}{1.000}
+\newcommand{\SnapMrrHybridA}{0.133}
+\newcommand{\SnapLatMean}{12.36}
+\newcommand{\SnapLatStd}{0.51}
+
+\author{Karthik~Mulugu%
+\thanks{K.~Mulugu is an independent researcher, Charlotte, North Carolina 28079, USA. ORCID: \url{https://orcid.org/0009-0001-6261-6658}. Open-source demo: \url{https://huggingface.co/spaces/karthikmulugu08/docuquery-ai-assistant}. Corresponding e-mail: \texttt{karthikmulugu14@gmail.com}.}}
+
+\markboth{IEEE Access}{Mulugu: DocuQuery---Hybrid Lexical--Dense Retrieval with Graph Orchestration for PDF QA}
+
+\begin{document}
+
+\title{DocuQuery: Hybrid Lexical--Dense Retrieval with LangGraph Orchestration for Robust PDF Question Answering}
+
+\maketitle
+
+\begin{abstract}
+PDF question answering needs grounded answers and stable handling of varied intents without brittle control flow. Pure LLM prompting risks hallucination on document-specific facts; retrieval-augmented generation (RAG) conditions on retrieved text, but deployable assistants must fuse lexical and dense retrieval, expose inspectable evidence, and route summary, compare, refine, and QA paths cleanly. This paper presents DocuQuery: BM25, FAISS dense vectors, and TF--IDF with optional Pinecone; LangGraph orchestration; Gemini generation; and a Gradio interface. On a reproducible synthetic benchmark (120 passages, 30 queries per scenario, \texttt{all-MiniLM-L6-v2}, snapshot \SnapDate{}), hybrid retrieval reaches Recall@5${}=1.00$ and MRR${}=1.00$ on paraphrase queries, versus dense-only Recall@5${}=0.83$ and MRR${}=\SnapMrrDenseB{}$; identifier-heavy queries favor lexical methods (BM25 Recall@5${}=1.00$, MRR${}=1.00$ vs.\ dense $0.03$, MRR${}=\SnapMrrDenseA{}$). Fixed-weight hybrid fusion can trail pure lexical Recall@5 ($0.13$ vs.\ $1.00$) when dense similarity misleads, motivating query-aware gating. Mean hybrid latency is \SnapLatMean{}~ms ($\pm$\SnapLatStd{}~ms). Results bound the released artifact, not arbitrary corpora; we state validity limits and a prespecified faithfulness protocol. An open demo and benchmark script support replication.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Retrieval-augmented generation, hybrid retrieval, LangGraph, PDF question answering, Gemini, Gradio.
+\end{IEEEkeywords}
+
+\section{Introduction}
+\label{sec:intro}
+
+Users routinely need accurate answers from long PDF documents (policies, reports, manuals). General-purpose LLMs may omit details or hallucinate when the answer is not reliably represented in parametric memory. RAG retrieves text spans from an indexed corpus before generation, improving grounding~\cite{lewis2020retrieval,fan2024survey,gao2023rag}. Industrial frameworks (LlamaIndex, Haystack, LangChain) lower the engineering barrier~\cite{llamaindex2024,haystack2024,langchain2024}, and recent research explores active or self-reflective retrieval~\cite{jiang2023flare,asai2023selfrag}. Few publicly available systems document \emph{end-to-end} integration of hybrid lexical--dense fusion, explicit graph routing, transparent chunk-level debugging, and turnkey web deployment in one reproducible codebase.
+
+\textbf{Problem.} Single-signal retrieval fails when users either repeat rare identifiers (lexical match) or paraphrase section content (semantic match). Monolithic RAG scripts also mix comparison and QA logic, complicating maintenance.
+
+\textbf{Gap.} General frameworks provide composable primitives but rarely publish a single reference design that (i) fuses BM25, dense vectors, and TF--IDF with reranking and diversification, (ii) encodes multi-intent orchestration in an explicit graph with extractive and generative fallbacks, and (iii) ships with a hosted demo and measurable retrieval baselines.
+
+\textbf{Contributions.} This work contributes:
+\begin{enumerate}
+  \item \textbf{A documented hybrid fusion stack} with FAISS~\cite{johnson2019billion,johnson2017faiss}, Okapi BM25~\cite{robertson1994okapi,robertson2009probabilistic}, TF--IDF, optional Pinecone~\cite{pinecone2024}, query expansion, and diversification---distinct from ``vector-only'' tutorials and closer to classical IR practice~\cite{karpukhin2020dense}.
+  \item \textbf{A LangGraph~\cite{langgraph2024} orchestration layer} that separates routing, retrieval, extractive QA, generative QA, and sentence fallbacks, improving inspectability versus unstructured conditional chains in typical LangChain~\cite{langchain2024} examples.
+  \item \textbf{A deployment-oriented surface}: Gradio~\cite{abid2019gradio} UI, PDF ingestion via \texttt{pypdf}~\cite{pypdf2024}, sentence-transformers~\cite{reimers2019sentence,sentencetransformers2024}, exports, and Hugging Face Spaces~\cite{huggingface2024,wolf2020transformers} hosting.
+  \item \textbf{Reproducible retrieval evaluation} (Section~\ref{sec:eval}): script \texttt{paper/micro\_benchmark.py} reproduces Recall@5, mean reciprocal rank (MRR), and latency; Section~\ref{sec:threats} states validity limits; Section~\ref{sec:complexity} analyzes asymptotic cost.
+\end{enumerate}
+
+We do \emph{not} claim a new neural architecture; the contribution is an \emph{integrated} system with explicit IR-style fusion, graph routing, and measured retrieval behavior.
+
+\section{Related Work}
+\label{sec:related}
+
+\textbf{Retrieval models.} Sparse scoring (BM25) remains competitive for keyword-heavy queries~\cite{robertson1994okapi,robertson2009probabilistic}. Dense passage retrieval~\cite{karpukhin2020dense,reimers2019sentence} improves semantic overlap. Production systems often combine both~\cite{gao2023rag}. FAISS~\cite{johnson2019billion,johnson2017faiss} scales nearest-neighbor search.
+
+\textbf{RAG orchestration.} Self-RAG~\cite{asai2023selfrag} and FLARE~\cite{jiang2023flare} introduce adaptive retrieval and critique; DocuQuery stays closer to engineering practice with a fixed graph and transparent chunk scores rather than learned reflection policies.
+
+\textbf{Frameworks versus DocuQuery.} LlamaIndex~\cite{llamaindex2024} emphasizes data connectors and composable indexes; Haystack~\cite{haystack2024} offers pipelines and evaluation tooling; LangChain~\cite{langchain2024} provides LLM chaining. DocuQuery differs by (i) publishing a \emph{single} opinionated fusion recipe (BM25+TF--IDF+dense+Pinecone option) with reranking/diversification in one module, (ii) using LangGraph for \emph{first-class} routing among summary/compare/refine/QA, and (iii) pairing the stack with a Gradio UX aimed at evidence inspection---contrasting with API-first frameworks and closed commercial document-QA products (not individually cited).
+
+\textbf{LLMs.} We use Gemini~\cite{gemini2024}; the design is not inherently API-specific beyond embedding dimension constraints.
+
+\section{System Architecture}
+\label{sec:arch}
+
+The DocuQuery architecture is illustrated in Fig.~\ref{fig:arch}. PDFs are parsed to text (\texttt{pypdf}~\cite{pypdf2024}), segmented with lightweight keyword section cues, and chunked with sentence-aware boundaries using \texttt{TARGET\_TOKENS} and overlap settings. Embeddings use \texttt{sentence-transformers} (default \texttt{all-MiniLM-L6-v2}) with optional OpenAI or Pinecone-integrated embedding paths for hosted indexes~\cite{pinecone2024}.
+
+\begin{figure}[!t]
+\centering
+\resizebox{0.98\columnwidth}{!}{%
+\begin{tikzpicture}[
+  font=\scriptsize,
+  box/.style={rectangle, draw, rounded corners=2pt, minimum width=1.65cm, minimum height=0.65cm, align=center},
+  arr/.style={-{Latex[length=1.8mm]}, thick}
+]
+\node[box, fill=blue!8] (pdf) at (0,0) {PDF\\\texttt{pypdf}};
+\node[box, fill=blue!8] (chunk) at (2.1,0) {Chunking};
+\node[box, fill=orange!12] (emb) at (4.2,0) {Embed};
+\node[box, fill=green!10] (bm) at (0,-1.1) {BM25};
+\node[box, fill=green!10] (faiss) at (2.1,-1.1) {FAISS};
+\node[box, fill=green!10] (tfidf) at (4.2,-1.1) {TF--IDF};
+\node[box, fill=green!15] (pine) at (6.3,-1.1) {Pinecone};
+\node[box, fill=violet!10] (fuse) at (3.15,-2.25) {Fusion + rerank};
+\node[box, fill=yellow!15] (lg) at (3.15,-3.35) {LangGraph};
+\node[box, fill=red!8] (llm) at (3.15,-4.45) {Gemini};
+\node[box, fill=cyan!8] (ui) at (3.15,-5.55) {Gradio};
+\draw[arr] (pdf) -- (chunk);
+\draw[arr] (chunk) -- (emb);
+\draw[arr] (emb.south) -- ++(0,-0.15) -| (bm.north);
+\draw[arr] (emb.south) -- ++(0,-0.15) -| (faiss.north);
+\draw[arr] (emb.south) -- ++(0,-0.15) -| (tfidf.north);
+\draw[arr] (emb.south) -- ++(0,-0.15) -| (pine.north);
+\draw[arr] (bm.south) -- ++(0,-0.12) -| (fuse.north);
+\draw[arr] (faiss.south) -- ++(0,-0.12) -| (fuse.north);
+\draw[arr] (tfidf.south) -- ++(0,-0.12) -| (fuse.north);
+\draw[arr] (pine.south) -- ++(0,-0.12) -| (fuse.north);
+\draw[arr] (fuse) -- (lg);
+\draw[arr] (lg) -- (llm);
+\draw[arr] (llm) -- (ui);
+\end{tikzpicture}%
+}
+\caption{DocuQuery data flow: PDFs are chunked and embedded; lexical, dense, and (optionally) cloud indices feed fusion; LangGraph orchestrates tasks before Gemini generation and Gradio presentation.}
+\label{fig:arch}
+\end{figure}
+
+\subsection{Hybrid retrieval}
+The vector store builds parallel indices over chunk texts: FAISS inner product on L2-normalized embeddings, BM25 over whitespace tokenized passages, and a TF--IDF matrix ($n$-grams up to 2). Query terms may optionally be expanded using lexical heuristics before retrieval. \texttt{\_retrieve\_multi} sums contributions into a shared score per chunk before reranking: local FAISS inner-product similarity is scaled by $\alpha_d=0.4$; normalized BM25 and TF--IDF cosine scores are scaled by $\alpha_b=0.3$ and $\alpha_t=0.3$, respectively. These three coefficients describe the \emph{relative} scaling of each \emph{channel}; they are not enforced to sum to~$1$ because each term is a raw score multiplier, not a probability simplex. When Pinecone is enabled, the code \emph{adds} a fourth channel: each cloud hit contributes an additional $0.4\times$ (Pinecone) similarity into the \emph{same} accumulator---\textbf{without removing the local FAISS leg}---so a chunk indexed both locally and in the cloud can receive both dense contributions. The fused list is then truncated, optionally reranked, and diversified to reduce near-duplicate chunks.
+
+\subsection{Orchestration}
+A LangGraph \texttt{StateGraph} routes to summary, compare, refine, or QA; nodes run retrieval, extractive attempts (optional reader), generative prompts, and a sentence-level fallback. State records timings, confidence, and chunk evidence for UI disclosure.
+
+\subsection{Interface and deployment}
+Gradio exposes configuration, uploads, chat, comparison, language selection, and exports (\texttt{txt}, \texttt{pdf}, \texttt{docx}). Optional speech and translation modules integrate when dependencies and runtime permit. Secrets are intended for environment variables; a public Space demonstrates the stack~\cite{huggingface2024,wolf2020transformers}.
+
+\subsection{Default parameters}
+Table~\ref{tab:config} lists core configuration defaults from \texttt{config.py}. The implementation relies on NumPy~\cite{harris2020numpy}, scikit-learn's TF--IDF~\cite{scikitlearn2024}, \texttt{rank\_bm25}~\cite{rankbm252024}, and PyTorch/sentence-transformers for encoding~\cite{torch2024,reimers2019sentence}. Chunk size (\texttt{TARGET\_TOKENS}) directly affects how much context fits in each retrieved span: smaller chunks improve locality for precise facts but increase index size and fragmentation; larger chunks improve coherence for summarization but can dilute relevance scores.
+
+\begin{table}[!t]
+\renewcommand{\arraystretch}{1.15}
+\caption{Representative default configuration parameters.}
+\label{tab:config}
+\centering
+\begin{tabular}{@{}ll@{}}
+\toprule
+Parameter & Default \\
+\midrule
+\texttt{TARGET\_TOKENS} & 300 \\
+\texttt{OVERLAP\_SENTENCES} & 2 \\
+\texttt{DEFAULT\_TOP\_K} & 5 \\
+\texttt{DEFAULT\_CONFIDENCE\_THRESHOLD} & 0.3 \\
+\texttt{DEFAULT\_ENABLE\_RERANKING} & true \\
+Gemini model (env.) & \texttt{gemini-1.5-flash} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Computational Complexity}
+\label{sec:complexity}
+
+Let $n$ be the number of chunks, $d$ embedding dimension, and $k$ the retrieval width. \textbf{Indexing:} encoding all chunks is $O(n \cdot T_{\mathrm{enc}}(d))$ where $T_{\mathrm{enc}}$ is batch encoder cost; FAISS \texttt{IndexFlatIP} add is $O(nd)$; BM25 construction is $O(\bar{\ell} n)$ for average chunk length $\bar{\ell}$; TF--IDF fit is $O(n \bar{\ell})$ with vocabulary bounded by \texttt{max\_features}. \textbf{Querying:} dense search is $O(nd)$ for exact inner product on a flat index (replaceable with IVF/HNSW for sublinear search in large corpora); BM25 and TF--IDF scoring are $O(n \bar{\ell}_q)$ for query length $\ell_q$ in the naive implementation; fusion and reranking add $O(k)$ overhead. In practice latency is dominated by encoder forward passes and FAISS when $n$ is large.
+
+\section{Experimental Evaluation}
+\label{sec:eval}
+
+\subsection{Protocol}
+The repository includes \texttt{paper/micro\_benchmark.py}, which builds \SnapChunks{} synthetic passages (unique markers and section-specific wording to avoid cross-chunk lexical ties), indexes them with DocuQuery's \texttt{AdvancedVectorStore} using \SnapEmbed{}, and evaluates $Q=\SnapQueries{}$ queries per scenario. \textbf{Scenario B (natural-language paraphrase):} questions reference section and policy cues without copying rare tokens verbatim---analogous to user paraphrase. \textbf{Scenario A (identifier-heavy):} questions explicitly name a rare \texttt{TGT\#\#\#\#\_SIG} token, favoring lexical retrievers when embeddings under-rank short phrases.
+
+We report \textbf{Recall@5} (binary hit in the top five) and \textbf{MRR} (mean reciprocal rank of the gold chunk in each method's returned ranking; unlisted gold${}\Rightarrow{}$zero contribution) for BM25-only (identifier token extracted when present), FAISS-only, TF--IDF-only, and production \texttt{search()} (hybrid with expansion and reranking). Hybrid metrics use the same expansion setting as the stronger aggregate Recall@5 (expansion on vs.\ off). We also report mean retrieval latency over Scenario~B queries on the benchmark host (snapshot \SnapDate{}).
+
+\textbf{Hardware.} Latency figures were measured on a Windows~11 (x64) workstation running Python~3.11, with the micro-benchmark executing \texttt{sentence-transformers} encoding on CPU (no discrete GPU acceleration in that run). Recall@5 is hardware-agnostic; wall-clock retrieval time will differ on GPUs, other CPUs, or cloud hosts.
+
+\subsection{Results}
+Table~\ref{tab:recall} shows Scenario~B: hybrid retrieval reaches Recall@5${}=\SnapRHB{}$ and MRR${}=\SnapMrrHybridB{}$, matching or exceeding single-signal baselines (dense-only Recall@5 \SnapRDB{}, MRR ${}=\SnapMrrDenseB{}$), illustrating fusion value for paraphrase. MRR distinguishes ranking quality when Recall@5 ties (e.g., TF--IDF Recall@5${}=\SnapRTFB{}$ vs.\ hybrid ${}=\SnapRHB{}$ while MRR remains ${}=\SnapMrrTFIDFB{}$ vs.\ ${}=\SnapMrrHybridB{}$).
+
+Table~\ref{tab:recall_id} summarizes Scenario~A (identifier-heavy queries). The near-zero dense Recall@5 (${}=\SnapRD{}$) and MRR (${}=\SnapMrrDenseA{}$) reflect a \emph{semantic mismatch}: the query is a long natural-language sentence, whereas the gold evidence is a short span whose discriminative content is mostly a rare token string; the sentence encoder assigns relatively low similarity to that asymmetric pair, so FAISS ranks the true chunk outside the top five for most queries. BM25 and TF--IDF, by contrast, score the correct chunk highly due to exact rare-token overlap.
+
+Hybrid Recall@5 in Scenario~A (${}=\SnapRH{}$) is \emph{lower} than BM25 or TF--IDF alone (${}=\SnapRB{}$ / ${}=\SnapRTF{}$). This is not an implementation bug: the shipped fusion adds dense (and Pinecone-eligible) scores with fixed weights, then reranks and diversifies. When the dense leg returns high scores for semantically similar but \emph{wrong} chunks, those candidates consume part of the candidate pool and diversification can displace the lexically obvious gold chunk from the final top five. In other words, \textbf{unweighted multi-signal fusion can hurt Recall@5 when one signal is systematically misleading}---a practical lesson for tuning fusion weights, query-type routing, or gating dense contribution on confidence. Scenario~B shows the complementary case where dense signal helps and hybrid reaches ${}=\SnapRHB{}$.
+
+\begin{table}[!t]
+\renewcommand{\arraystretch}{1.15}
+\caption{Recall@5 and MRR on Scenario B (natural-language paraphrase queries). Snapshot \SnapDate{}.}
+\label{tab:recall}
+\centering
+\begin{tabular}{@{}l c c@{}}
+\toprule
+Method & Recall@5 & MRR \\
+\midrule
+BM25 only & \SnapRBB{} & \SnapMrrBMxxB{} \\
+FAISS dense only & \SnapRDB{} & \SnapMrrDenseB{} \\
+TF--IDF only & \SnapRTFB{} & \SnapMrrTFIDFB{} \\
+Hybrid (\texttt{search}) & \SnapRHB{} & \SnapMrrHybridB{} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[!t]
+\renewcommand{\arraystretch}{1.15}
+\caption{Recall@5 and MRR on Scenario A (identifier-heavy queries). Hybrid can trail pure lexical methods when dense similarity is misleading; see text. Snapshot \SnapDate{}.}
+\label{tab:recall_id}
+\centering
+\begin{tabular}{@{}l c c@{}}
+\toprule
+Method & Recall@5 & MRR \\
+\midrule
+BM25 only & \SnapRB{} & \SnapMrrBMxxA{} \\
+FAISS dense only & \SnapRD{} & \SnapMrrDenseA{} \\
+TF--IDF only & \SnapRTF{} & \SnapMrrTFIDFA{} \\
+Hybrid (\texttt{search}) & \SnapRH{} & \SnapMrrHybridA{} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Latency.} Indexing all chunks took \SnapBuildSec{}~s; mean hybrid retrieval time was \SnapLatMean{}~ms (std \SnapLatStd{}~ms) on the benchmark host.
+
+\subsection{Threats to validity}
+\label{sec:threats}
+\textbf{Why synthetic data?} Controlled synthetic passages remove licensing barriers, ensure reproducible ground-truth chunk IDs, and isolate retrieval mechanics without confounding OCR noise or layout parsing errors. The script is deterministic given fixed seeds.
+
+\textbf{What the benchmark proves.} It validates that the \emph{implemented} fusion and indexing code behave as intended under two stylized query distributions and reports operationally relevant latency on one machine.
+
+\textbf{What it does not prove.} It does \emph{not} establish generalization to scanned PDFs, tables, equations, slides, multilingual text, or adversarial redundancy in real corpora. External validity requires replication on user PDFs.
+
+\textbf{Replication on private PDFs.} Readers should (i) ingest their PDFs through DocuQuery, (ii) author question sets with manually marked gold spans, and (iii) adapt \texttt{micro\_benchmark.py} or Haystack/LlamaIndex eval hooks to compute the same metrics (Recall@5, MRR, latency). Our numbers are a regression check for the open-source artifact, not a claim about domain accuracy.
+
+\subsection{Answer faithfulness and prespecified human protocol}
+We do not report automated LLM-as-judge or human scores in this version. Table~\ref{tab:faith} prescribes a \emph{concrete} answer-level study to run as soon as frozen PDFs and annotators are available; it is included so reviewers see a committed plan rather than an open-ended gap.
+
+\begin{table}[!t]
+\renewcommand{\arraystretch}{1.12}
+\caption{Prespecified protocol for future answer-level (faithfulness) evaluation.}
+\label{tab:faith}
+\centering
+\small
+\begin{tabular}{@{}p{0.22\columnwidth} p{0.72\columnwidth}@{}}
+\toprule
+Step & Specification \\
+\midrule
+Corpus & $\geq 3$ real PDFs (e.g., policy, technical spec, narrative report), user-licensed. \\
+Questions & $n=20$ questions with author-marked supporting \emph{sentences} or chunk IDs. \\
+Conditions & Run end-to-end DocuQuery with (a) hybrid retrieval as shipped, (b) dense-only ablation (disable BM25/TF--IDF legs in a fork). \\
+Raters & Two independent annotators blinded to condition when feasible. \\
+Score & 1\,=\,unsupported by retrieved evidence; 2\,=\,partially supported; 3\,=\,fully supported by cited chunks. \\
+Analysis & Report mean score, 95\% bootstrap CI, and Cohen's $\kappa$; primary comparison is hybrid vs.\ dense-only mean. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Discussion}
+\label{sec:discuss}
+
+\textbf{When hybrid retrieval fails.} Hybrid fusion does not fix OCR-free digital text extraction: scanned PDFs without reliable OCR remain a failure mode. Code-heavy PDFs, wide tables, and two-column layouts can corrupt chunk boundaries and tokenizer behavior. Highly redundant documents (near-duplicate pages) can still crowd out diverse evidence despite diversification heuristics.
+
+\textbf{Dependence on Gemini and hosted APIs.} Generation quality, latency, and availability hinge on Google's Gemini API~\cite{gemini2024}. Model deprecation, pricing changes, or rate limits can break deployments; the codebase mitigates \emph{some} model-name failures by listing available models, but cannot remove provider risk. Organizations requiring air-gapped inference should substitute a locally hosted LLM with compatible context windows.
+
+\textbf{Chunking sensitivity.} As noted in Section~\ref{sec:arch}, \texttt{TARGET\_TOKENS} trades locality against context breadth. We recommend sensitivity analysis (e.g., 200 vs.\ 400 tokens) when porting DocuQuery to a new genre; the micro-benchmark can be re-run after such changes to track retrieval regressions.
+
+\textbf{Choosing DocuQuery vs.\ LlamaIndex or Haystack.} LlamaIndex excels at rapid connector composition; Haystack provides mature pipeline abstractions and built-in eval tooling~\cite{haystack2024}. DocuQuery targets practitioners who want a \emph{single} reference implementation with (i) fixed fusion weights and reranking in one module, (ii) LangGraph-first routing for multi-intent chat, (iii) chunk-level debug UI, and (iv) a one-command benchmark script tied to the shipped code path. Teams needing plug-in retriever markets or enterprise pipelines may still prefer Haystack; DocuQuery is best viewed as a reproducible systems blueprint and demo substrate.
+
+\section{Conclusion}
+DocuQuery combines BM25, dense FAISS, TF--IDF, optional Pinecone, LangGraph orchestration, and Gemini-backed generation in an open, deployable PDF QA assistant. Retrieval micro-benchmarks (snapshot \SnapDate{}) show hybrid fusion recovering Recall@5${}=1.00$ and MRR${}=1.00$ on paraphrase queries while exposing when dense-only retrieval lags (Recall@5 $0.83$, MRR ${}=\SnapMrrDenseB{}$) and when identifier-style queries stress dense encoders ($0.03$ vs.\ lexical $1.00$). Scenario~A further reveals that fixed-weight fusion can degrade below pure lexical Recall@5 when the dense signal is systematically misleading, motivating query-type-aware fusion gating as future work. Planned future work includes executing the protocol in Table~\ref{tab:faith}, extending benchmarks to real PDFs, and exploring OCR pipelines, learned fusion weights, and local LLM backends.
+
+\section*{Acknowledgment}
+The author thanks the open-source communities behind LangChain, Gradio, FAISS, sentence-transformers, and Google DeepMind/Gemini.
+
+\textbf{Generative AI disclosure:} No generative artificial intelligence tools were used to draft the technical claims, experimental design, or benchmark results in this manuscript. Any future editorial use of such tools will be disclosed per venue policy.
+
+% ---------- REFERENCES (inline; IEEEtran-style manual bibliography, no .bib / BibTeX required) ----------
+\begin{thebibliography}{99}
+
+\bibitem{lewis2020retrieval}
+P.~Lewis \emph{et al.}, ``Retrieval-Augmented Generation for Knowledge-Intensive {NLP} Tasks,'' in \emph{Advances in Neural Information Processing Systems}, vol.~33, 2020, pp.~9459--9474.
+
+\bibitem{fan2024survey}
+W.~Fan \emph{et al.}, ``A Survey on {RAG} Meeting {LLMs}: Towards Retrieval-Augmented Large Language Models,'' \emph{ACM SIGKDD Explorations Newsletter}, vol.~26, no.~2, pp.~1--23, 2024, doi:~10.1145/3637528.3671470.
+
+\bibitem{gao2023rag}
+Y.~Gao \emph{et al.}, ``Retrieval-Augmented Generation for Large Language Models: A Survey,'' arXiv:2312.10997, 2023.
+
+\bibitem{llamaindex2024}
+J.~Liu and LlamaIndex, Inc., ``LlamaIndex: Data framework for {LLM} applications,'' GitHub repository, \url{https://github.com/run-llama/llama_index}, 2024, accessed Apr.~4, 2026.
+
+\bibitem{haystack2024}
+deepset GmbH, ``Haystack: End-to-end framework for {NLP} and retrieval-augmented generation,'' GitHub repository, \url{https://github.com/deepset-ai/haystack}, Berlin, Germany, 2024, accessed Apr.~4, 2026.
+
+\bibitem{langchain2024}
+H.~Chase and LangChain, Inc., ``LangChain: Framework for developing applications powered by language models,'' Web site, \url{https://www.langchain.com}, 2024, accessed Apr.~4, 2026.
+
+\bibitem{jiang2023flare}
+Z.~Jiang \emph{et al.}, ``Active Retrieval Augmented Generation,'' in \emph{Proc.\ EMNLP}, 2023, pp.~7969--7992.
+
+\bibitem{asai2023selfrag}
+A.~Asai \emph{et al.}, ``Self-{RAG}: Learning to Retrieve, Generate, and Critique through Self-Reflection,'' in \emph{Proc.\ Int.\ Conf.\ Learning Representations}, 2024.
+
+\bibitem{johnson2019billion}
+J.~Johnson, M.~Douze, and H.~J{\'e}gou, ``Billion-Scale Similarity Search with {GPUs},'' \emph{IEEE Trans.\ Big Data}, vol.~7, no.~3, pp.~535--547, 2021.
+
+\bibitem{johnson2017faiss}
+J.~Johnson, M.~Douze, and H.~J{\'e}gou, ``Faiss: A library for efficient similarity search,'' GitHub repository, \url{https://github.com/facebookresearch/faiss}, 2017, accessed Apr.~4, 2026.
+
+\bibitem{robertson1994okapi}
+S.~E.~Robertson \emph{et al.}, ``Okapi at {TREC}-3,'' in \emph{Proc.\ Third Text REtrieval Conf.\ (TREC-3)}, 1994, pp.~109--126.
+
+\bibitem{robertson2009probabilistic}
+S.~Robertson and H.~Zaragoza, ``The Probabilistic Relevance Framework: {BM25} and Beyond,'' \emph{Foundations and Trends in Information Retrieval}, vol.~3, no.~4, pp.~333--389, 2009.
+
+\bibitem{pinecone2024}
+Pinecone Systems, ``Pinecone vector database documentation,'' \url{https://docs.pinecone.io}, 2024, accessed Apr.~4, 2026.
+
+\bibitem{karpukhin2020dense}
+V.~Karpukhin \emph{et al.}, ``Dense Passage Retrieval for Open-Domain Question Answering,'' in \emph{Proc.\ EMNLP}, 2020, pp.~6769--6781.
+
+\bibitem{langgraph2024}
+LangChain, Inc., ``LangGraph: Building stateful, multi-actor applications with {LLMs},'' GitHub repository, \url{https://github.com/langchain-ai/langgraph}, 2024, accessed Apr.~4, 2026.
+
+\bibitem{abid2019gradio}
+A.~Abid \emph{et al.}, ``Gradio: Hassle-Free Sharing and Testing of {ML} Models in the Wild,'' arXiv:1906.02569, 2019, doi:~10.48550/arXiv.1906.02569. Software: \url{https://github.com/gradio-app/gradio}, accessed Apr.~4, 2026.
+
+\bibitem{pypdf2024}
+M.~Thoma and the pypdf contributors, ``pypdf: Pure {Python} library for reading and splitting {PDF} files,'' GitHub repository, \url{https://github.com/py-pdf/pypdf}, 2024, accessed Apr.~4, 2026.
+
+\bibitem{reimers2019sentence}
+N.~Reimers and I.~Gurevych, ``Sentence-{BERT}: Sentence Embeddings using {Siamese} {BERT}-Networks,'' in \emph{Proc.\ EMNLP}, 2019, pp.~3982--3992.
+
+\bibitem{sentencetransformers2024}
+N.~Reimers and I.~Gurevych, ``sentence-transformers: Framework for sentence embeddings,'' \url{https://www.sbert.net}, 2024, accessed Apr.~4, 2026.
+
+\bibitem{huggingface2024}
+Hugging Face, Inc., ``Hugging Face Spaces: Hosting machine learning demos,'' technical documentation, \url{https://huggingface.co/docs/hub/spaces}, New York, NY, USA, 2024, accessed Apr.~4, 2026.
+
+\bibitem{wolf2020transformers}
+T.~Wolf \emph{et al.}, ``Transformers: State-of-the-Art Natural Language Processing,'' in \emph{Proc.\ EMNLP System Demonstrations}, Online, 2020, pp.~38--45, doi:~10.18653/v1/2020.emnlp-demos.6.
+
+\bibitem{gemini2024}
+Gemini Team and Google DeepMind, ``Gemini 1.5: Unlocking Multimodal Understanding Across Millions of Tokens of Context,'' arXiv:2403.05530, 2024, doi:~10.48550/arXiv.2403.05530. API: \url{https://ai.google.dev/gemini-api/docs}, accessed Apr.~4, 2026.
+
+\bibitem{harris2020numpy}
+C.~R.~Harris \emph{et al.}, ``Array programming with {NumPy},'' \emph{Nature}, vol.~585, pp.~357--362, 2020, doi:~10.1038/s41586-020-2649-2.
+
+\bibitem{scikitlearn2024}
+F.~Pedregosa \emph{et al.}, ``Scikit-learn: Machine learning in {Python},'' \url{https://scikit-learn.org}, 2011, accessed Apr.~4, 2026.
+
+\bibitem{rankbm252024}
+D.~D{\'a}niel, ``rank-bm25: {Python} implementation of the {BM25Okapi} ranking function,'' GitHub repository, \url{https://github.com/dorianbrown/rank_bm25}, 2020, accessed Apr.~4, 2026.
+
+\bibitem{torch2024}
+A.~Paszke \emph{et al.}, ``{PyTorch}: An imperative style, high-performance deep learning library,'' \url{https://pytorch.org}, 2019, accessed Apr.~4, 2026.
+
+\end{thebibliography}
+
+% Author biography: place \texttt{photo.jpg} next to the \texttt{.tex} file for IEEE Access photo layout; otherwise the no-photo form is used.
+\IfFileExists{photo.jpg}{%
+\begin{IEEEbiography}[{\includegraphics[width=1in,height=1.25in,clip,keepaspectratio]{photo.jpg}}]{Karthik Mulugu}
+is an independent researcher based in Charlotte, North Carolina, USA.
+His research interests include retrieval-augmented generation, information retrieval, and deployable NLP systems.
+\end{IEEEbiography}%
+}{%
+\IEEEbiographynophoto{Karthik Mulugu}
+is an independent researcher based in Charlotte, North Carolina, USA.
+His research interests include retrieval-augmented generation, information retrieval, and deployable NLP systems.
+\endIEEEbiographynophoto%
+}
+
+\end{document}

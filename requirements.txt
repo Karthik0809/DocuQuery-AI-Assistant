@@ -1,7 +1,8 @@
 # Core dependencies
-gradio==4.44.1
-gradio_client==1.3.0
-huggingface_hub<0.26.0
+# Gradio 6.x supports Starlette 1.x (fixes HF Spaces Jinja2 TemplateResponse crash with Gradio 4.44 + Starlette 1.0).
+gradio==6.11.0
+gradio_client==2.4.0
+huggingface_hub>=0.33.5,<2.0
 torch>=2.0.0
 transformers>=4.30.0
 sentence-transformers>=2.2.0
