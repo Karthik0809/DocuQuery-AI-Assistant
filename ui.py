@@ -269,12 +269,11 @@ def launch():
 
             with gr.Column(scale=2):
                 chat = gr.Chatbot(
-                    label="Chat", 
-                    height=650, 
+                    label="Chat",
+                    height=650,
                     show_label=False,
                     avatar_images=("https://i.pravatar.cc/100?img=68", "https://robohash.org/docuquery-bot.png?size=100x100&set=set3"),
-                    show_share_button=False,
-                    sanitize_html=False
+                    sanitize_html=False,
                 )
                 
                 # Question Input Section
