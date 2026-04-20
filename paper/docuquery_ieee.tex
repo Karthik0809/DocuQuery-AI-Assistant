@@ -7,6 +7,7 @@
 \usepackage{cite}
 \usepackage{amsmath,amssymb}
 \usepackage{booktabs}
+\usepackage{multirow}
 \usepackage{graphicx}
 \usepackage{url}
 \usepackage[hidelinks]{hyperref}
@@ -113,25 +114,25 @@ Conditional retrieval logic embedded in a single function hinders debugging, sta
 \textbf{Why not use an existing framework?}
 Table~\ref{tab:framework} compares DocuQuery to LangChain~\cite{langchain2024}, Haystack~\cite{haystack2024}, and LlamaIndex~\cite{llamaindex2024}. None publishes a single reference fusion recipe with documented weight sensitivity, OCR/multilingual robustness evaluation, and an attached significance-tested benchmark.
 
-\begin{table}[!t]
+\begin{table*}[!t]
 \renewcommand{\arraystretch}{1.15}
-\caption{Feature comparison. \checkmark\,=\,natively available; $\circ$\,=\,plug-in; --\,=\,not in core.}
+\caption{Feature comparison of open frameworks vs.\ DocuQuery.
+\checkmark\,=\,natively available;\enspace $\circ$\,=\,available via plug-in/extension;\enspace --\,=\,not provided in core.}
 \label{tab:framework}
 \centering
-\small
 \begin{tabular}{@{}l c c c c@{}}
 \toprule
-Feature & LlamaIdx & Haystack & LangChain & DocuQuery \\
+Feature & LlamaIndex & Haystack & LangChain & DocuQuery \\
 \midrule
-Hybrid BM25+Dense           & $\circ$ & $\circ$ & $\circ$ & \checkmark \\
-Documented fusion weights   & --      & --      & --      & \checkmark \\
-LangGraph routing           & --      & --      & $\circ$ & \checkmark \\
-Chunk-level evidence UI     & --      & $\circ$ & --      & \checkmark \\
-OCR/multilingual benchmark  & --      & --      & --      & \checkmark \\
-McNemar significance tests  & --      & --      & --      & \checkmark \\
+Hybrid BM25 + Dense retrieval        & $\circ$ & $\circ$ & $\circ$ & \checkmark \\
+Documented fusion weights            & --      & --      & --      & \checkmark \\
+LangGraph-based routing              & --      & --      & $\circ$ & \checkmark \\
+Chunk-level evidence UI              & --      & $\circ$ & --      & \checkmark \\
+OCR-noise and multilingual benchmark & --      & --      & --      & \checkmark \\
+McNemar significance testing         & --      & --      & --      & \checkmark \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{table*}
 
 \textbf{Contributions.}
 \begin{enumerate}
@@ -331,25 +332,25 @@ BM25 and TF--IDF reach Recall@5\,=\,\SnapRB{}; dense fails (\SnapRD{}) due to em
 
 Table~\ref{tab:ocr_ml} reports robustness results. McNemar Dense-vs-Hybrid is $p{<}0.001$ for both scenarios.
 
-\begin{table}[!t]
+\begin{table*}[!t]
 \renewcommand{\arraystretch}{1.15}
-\caption{Scenarios C (OCR noise) and D (multilingual). Recall@5 per method; MRR and nDCG@5 for Hybrid.}
+\caption{Scenarios C (OCR noise) and D (multilingual). Recall@5 shown for all methods; MRR and nDCG@5 shown for Hybrid only.
+McNemar Dense-vs-Hybrid: $p{<}0.001$ for both scenarios. $n{=}\SnapChunks{}$, $Q{=}\SnapQueries{}$. Snapshot \SnapDate{}.}
 \label{tab:ocr_ml}
 \centering
-\small
-\begin{tabular}{@{}l cc cc@{}}
+\begin{tabular}{@{}l ccc ccc@{}}
 \toprule
- & \multicolumn{2}{c}{Scen.\ C -- OCR Noise} & \multicolumn{2}{c}{Scen.\ D -- Multilingual} \\
-\cmidrule(lr){2-3}\cmidrule(lr){4-5}
-Method & R@5 & MRR / nDCG@5 & R@5 & MRR / nDCG@5 \\
+ & \multicolumn{3}{c}{Scenario C --- OCR Noise} & \multicolumn{3}{c}{Scenario D --- Multilingual} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}
+Method & Recall@5 & MRR & nDCG@5 & Recall@5 & MRR & nDCG@5 \\
 \midrule
-BM25 only   & \SnapRBMC{}   & ---                          & \SnapRBMD{}   & --- \\
-Dense only  & \SnapRDenseC{} & ---                         & \SnapRDenseD{} & --- \\
-TF--IDF     & \SnapRTFC{}   & ---                          & \SnapRTFD{}   & --- \\
-Hybrid      & \SnapRHC{}    & \SnapMrrHybridC{} / \SnapNDCGHC{} & \SnapRHD{} & \SnapMrrHybridD{} / \SnapNDCGHD{} \\
+BM25 only        & \SnapRBMC{}    & ---  & ---  & \SnapRBMD{}    & ---  & --- \\
+FAISS dense only & \SnapRDenseC{} & ---  & ---  & \SnapRDenseD{} & ---  & --- \\
+TF--IDF only     & \SnapRTFC{}    & ---  & ---  & \SnapRTFD{}    & ---  & --- \\
+Hybrid           & \SnapRHC{}     & \SnapMrrHybridC{} & \SnapNDCGHC{} & \SnapRHD{} & \SnapMrrHybridD{} & \SnapNDCGHD{} \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{table*}
 
 \textbf{Scenario C (OCR noise).}
 2\% noise reduces BM25 Recall@5 by 11.0~pp (1.000$\to$0.890) and TF--IDF by 12.0~pp, confirming that lexical exact-match is sensitive to character corruption. Dense is largely unaffected (0.160 vs.\ 0.170), but starts from a low base. Hybrid matches the best single-signal method (BM25, Recall@5\,=\,\SnapRHC{}) and exceeds both lexical methods on nDCG@5\,=\,\SnapNDCGHC{}: the dense channel improves ranking even when it cannot recover all missed chunks. For high-noise documents, OCR post-processing before indexing is recommended.
@@ -443,6 +444,9 @@ An 11~pp Recall drop under noise (Scenario~C) versus clean (Scenario~B) for BM25
 
 \textbf{Multilingual.}
 Hybrid's strong performance on Scenario~D is attributable to the shared English tokens (\texttt{TGT\#\#\#\#\_SIG}). Fully non-English corpora without shared tokens would require a cross-lingual embedding model.
+
+\textbf{Individual component contributions.}
+The benchmark isolates retrieval components by design: Tables~\ref{tab:recall}--\ref{tab:recall_id} directly compare BM25-only, FAISS-only, TF--IDF-only, and Hybrid, quantifying each signal's contribution. FAISS is evaluated as FAISS-only (dense-only baseline); Pinecone is an optional fourth channel that mirrors FAISS semantically and is not separately benchmarked here. Gemini affects only generation quality, not retrieval metrics; its individual contribution to answer faithfulness is scoped to the prespecified protocol in Table~\ref{tab:faith}. Gradio contributes zero to retrieval and is excluded from benchmarking by design.
 
 \textbf{Positioning.}
 DocuQuery targets practitioners wanting one opinionated blueprint with documented failure modes, LangGraph routing, chunk-level UI, and four significance-tested benchmark scenarios. LlamaIndex and Haystack are preferable for plug-in retriever markets.
