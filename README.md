@@ -191,7 +191,7 @@ Live Space URL:
 
 - Handled automatically: app lists available models and switches to a supported one
 
-### `list indices must be integers or slices, not float`
+### Error: "list indices must be integers or slices, not float"
 
 - Fixed in Pinecone metadata handling by safe integer casting for `idx`
 
