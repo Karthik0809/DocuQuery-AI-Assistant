@@ -1,0 +1,4 @@
+dense_recall5[all-MiniLM-L6-v2] = 0.170
+dense_recall5[all-mpnet-base-v2] = 0.920
+retrieval_ms: mean=11.3 median=11.1 p95=13.2
+e2e_ms:       mean=38.0 median=36.9 p95=46.9

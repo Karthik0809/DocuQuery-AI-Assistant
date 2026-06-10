@@ -39,7 +39,8 @@ python paper/micro_benchmark.py
 
 **Key results:**
 - **The hybrid's real advantage is robustness under noise**: +73pp Recall@5 over dense-only on OCR-corrupted queries (0.89 vs 0.16, McNemar p < 0.0001) — the scenario closest to real-world scanned documents. On clean paraphrase queries BM25 alone matches the hybrid (both 1.00); the hybrid's value is consistency across all conditions, not beating BM25 everywhere
-- **Mean retrieval latency: 16.3 ± 0.9ms** (95% CI) per query over 1,000 chunks, including query expansion and reranking; index build: 2.1s
+- **End-to-end latency (query → hybrid retrieval → extractive answer): 37ms median, 47ms p95** over 1,000 chunks, fully local with no API calls; retrieval alone is 11ms median (run `python paper/embedder_e2e_benchmark.py`)
+- **The weak dense scores are embedder capacity, not a dense-retrieval flaw**: swapping `all-MiniLM-L6-v2` (22M params) for `all-mpnet-base-v2` (110M) lifts dense-only paraphrase Recall@5 from **0.17 to 0.92** — MiniLM is kept as the default for CPU-friendly deployment, and the lexical components compensate
 - **Honest limitation:** on rare-identifier lookups (e.g., exact document codes), pure BM25 outperforms the hybrid (1.00 vs 0.48) because dense scores dilute exact-match signal — documented rather than hidden, and a known trade-off of fixed-weight fusion
 
 Full methodology and statistical analysis in [`paper/docuquery_ieee.tex`](paper/docuquery_ieee.tex); results auto-generated into [`paper/benchmark_results.tex`](paper/benchmark_results.tex).

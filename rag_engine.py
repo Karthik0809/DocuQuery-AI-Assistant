@@ -427,14 +427,44 @@ class EnhancedQAModel:
     def __init__(self):
         m = "deepset/roberta-base-squad2"
         self.pipe = None
+        self._tok = None
+        self._model = None
         try:
             self.pipe = pipeline("question-answering", model=m, tokenizer=m, device=0 if torch.cuda.is_available() else -1)
-        except Exception as e:
-            print(f"Extractive QA model unavailable (startup will continue): {e}")
+        except Exception:
+            # transformers >= 5 removed the "question-answering" pipeline task;
+            # fall back to direct AutoModelForQuestionAnswering inference.
+            try:
+                from transformers import AutoTokenizer, AutoModelForQuestionAnswering
+                self._tok = AutoTokenizer.from_pretrained(m)
+                self._model = AutoModelForQuestionAnswering.from_pretrained(m)
+                self._model.eval()
+                if torch.cuda.is_available():
+                    self._model = self._model.cuda()
+                print("Extractive QA: using direct AutoModelForQuestionAnswering (pipeline task unavailable).")
+            except Exception as e:
+                print(f"Extractive QA model unavailable (startup will continue): {e}")
+
+    def _qa_direct(self, question, context):
+        inputs = self._tok(question, context, return_tensors="pt", truncation=True, max_length=512)
+        if torch.cuda.is_available():
+            inputs = {k: v.cuda() for k, v in inputs.items()}
+        with torch.no_grad():
+            out = self._model(**inputs)
+        start_probs = torch.softmax(out.start_logits[0], dim=-1)
+        end_probs = torch.softmax(out.end_logits[0], dim=-1)
+        s_idx = int(start_probs.argmax())
+        e_idx = int(end_probs.argmax())
+        if e_idx < s_idx or e_idx - s_idx > 50:
+            return {"answer": "", "score": 0.0, "start": -1, "end": -1}
+        score = float(start_probs[s_idx] * end_probs[e_idx])
+        span_ids = inputs["input_ids"][0][s_idx : e_idx + 1]
+        answer = self._tok.decode(span_ids, skip_special_tokens=True).strip()
+        return {"answer": answer, "score": score, "start": -1, "end": -1}
 
     def answer(self, question, hits):
         start = time.time()
-        if self.pipe is None:
+        if self.pipe is None and self._model is None:
             return {"found": False, "confidence": 0.0, "processing_time": time.time() - start}
         if not hits:
             return {"found": False, "confidence": 0.0, "processing_time": 0.0}
@@ -443,7 +473,7 @@ class EnhancedQAModel:
         for h in hits[:3]:
             try:
                 context = h["text"][:4000]
-                out = self.pipe({"question": question, "context": context})
+                out = self.pipe({"question": question, "context": context}) if self.pipe else self._qa_direct(question, context)
                 ans = (out.get("answer") or "").strip()
                 sc = float(out.get("score", 0.0))
                 if sc > score and ans and len(ans.split()) >= 2:
