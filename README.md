@@ -12,7 +12,7 @@ pinned: false
 
 # DocuQuery AI Assistant
 
-Gradio-based RAG application for querying PDF documents with hybrid retrieval (FAISS + BM25 + TF-IDF + reranking), Gemini generation, and optional Pinecone cloud search — with a **reproducible retrieval benchmark** showing the hybrid pipeline achieves **1.00 Recall@5 / 0.99 MRR** on paraphrase queries at **~16ms median retrieval latency** over 1,000 chunks.
+Gradio-based RAG application for querying PDF documents with hybrid retrieval (FAISS + BM25 + TF-IDF + reranking), Gemini generation, and optional Pinecone cloud search — with a **reproducible retrieval benchmark** showing **1.00 Recall@5** on clean queries, **+73pp robustness gain over dense-only retrieval under OCR noise**, and **~16ms retrieval latency** over 1,000 chunks.
 
 This project is domain-agnostic (works across general document types), with a simplified UI and improved readability for answers, previews, comparisons, and exports.
 
@@ -38,7 +38,7 @@ python paper/micro_benchmark.py
 | Identifier-heavy queries | **1.000** | 0.130 | 1.000 | 0.480 |
 
 **Key results:**
-- Hybrid retrieval beats dense-only by **+83pp Recall@5** on paraphrase queries (McNemar p < 0.0001) and **+73pp** under OCR noise — the lexical components (BM25/TF-IDF) carry signal that pure embeddings miss on this corpus
+- **The hybrid's real advantage is robustness under noise**: +73pp Recall@5 over dense-only on OCR-corrupted queries (0.89 vs 0.16, McNemar p < 0.0001) — the scenario closest to real-world scanned documents. On clean paraphrase queries BM25 alone matches the hybrid (both 1.00); the hybrid's value is consistency across all conditions, not beating BM25 everywhere
 - **Mean retrieval latency: 16.3 ± 0.9ms** (95% CI) per query over 1,000 chunks, including query expansion and reranking; index build: 2.1s
 - **Honest limitation:** on rare-identifier lookups (e.g., exact document codes), pure BM25 outperforms the hybrid (1.00 vs 0.48) because dense scores dilute exact-match signal — documented rather than hidden, and a known trade-off of fixed-weight fusion
 
